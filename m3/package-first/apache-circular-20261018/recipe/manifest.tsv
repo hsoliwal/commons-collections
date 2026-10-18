@@ -1,0 +1,3 @@
+src/main/java/com/m3/collections/apache/BoundedCollection.java	ABSENT	7c3d1d0595eb4a9029c185b0ca9092caf221538c81e02318bf3ddb968126e690	BoundedCollection.java.txt
+src/main/java/com/m3/collections/apache/queue/CircularFifoQueue.java	ABSENT	a93526672443ce20662aa44b528e90d1b739e30ed9b33078e1ff3473f64f1e97	CircularFifoQueue.java.txt
+src/test/java/com/m3/collections/apache/queue/M3ApacheCircularFifoRelocationProof.java	ABSENT	d2fd425b93429cb0395df817dc539568f4cbc764c193937506490aa6c9dcc9d8	M3ApacheCircularFifoRelocationProof.java.txt
