@@ -1,0 +1,29 @@
+type: specs.openrewrite.org/v1beta/recipe
+name: com.synexia.m3.donors.RelocateApacheCollectionsFamily20261018
+displayName: Relocate Apache Commons Collections into the M3 donor namespace
+description: Apply only to an isolated donor working copy, not the public original API.
+recipeList:
+  - org.openrewrite.java.ChangePackage:
+      oldPackageName: org.apache.commons.collections4
+      newPackageName: com.m3.collections.apache
+      recursive: true
+---
+type: specs.openrewrite.org/v1beta/recipe
+name: com.synexia.m3.donors.RelocateGuavaFamily20261018
+displayName: Relocate Guava source into the M3 donor namespace
+description: Apply on the isolated Guava working copy with full public/source tests.
+recipeList:
+  - org.openrewrite.java.ChangePackage:
+      oldPackageName: com.google.common
+      newPackageName: com.m3.collections.guava
+      recursive: true
+---
+type: specs.openrewrite.org/v1beta/recipe
+name: com.synexia.m3.donors.RelocateEclipseCollectionsFamily20261018
+displayName: Relocate Eclipse Collections into M3 donor namespace
+description: Requires generator/source dual closure and EPL/EDL attribution on fork.
+recipeList:
+  - org.openrewrite.java.ChangePackage:
+      oldPackageName: org.eclipse.collections
+      newPackageName: com.m3.collections.eclipse
+      recursive: true
