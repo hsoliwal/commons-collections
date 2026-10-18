@@ -1,0 +1,47 @@
+# SPDX-License-Identifier: Apache-2.0
+name: M3Scale every tracked file (Java21)
+on:
+  pull_request:
+    paths:
+      - 'tools/m3scale/**'
+      - '.github/workflows/m3scale-all-files-20261018.yml'
+  workflow_dispatch:
+jobs:
+  m3-all-files:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile canonical Java21 M3 all-file controller
+        run: |
+          mkdir -p /tmp/m3-classes
+          javac --release 21 -Xlint:all -Werror -d /tmp/m3-classes tools/m3scale/M3ForkFilePass.java
+      - name: Scan every tracked file and require deterministic replay
+        run: |
+          java -cp /tmp/m3-classes M3ForkFilePass scan . /tmp/m3-output
+          java -cp /tmp/m3-classes M3ForkFilePass verify . /tmp/m3-output
+      - name: Refuse source drift
+        run: |
+          mkdir -p /tmp/m3-drift-fixture
+          cd /tmp/m3-drift-fixture
+          git init -q
+          git config user.email m3@local.invalid
+          git config user.name M3
+          echo 'class Before {}' > Before.java
+          git add Before.java
+          git commit -qm baseline
+          java -cp /tmp/m3-classes M3ForkFilePass scan . /tmp/m3-drift-evidence
+          echo 'class After {}' > Before.java
+          if java -cp /tmp/m3-classes M3ForkFilePass verify . /tmp/m3-drift-evidence; then
+            echo 'ERROR: M3 source-drift refusal failed'
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: m3scale-apache-commons-collections-all-files
+          path: /tmp/m3-output/
