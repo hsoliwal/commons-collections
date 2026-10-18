@@ -4,8 +4,8 @@ package com.synexia.m3.commons;
 
 import com.m3.collections.M3ObjectStream;
 import java.util.Objects;
-import org.apache.commons.collections4.Bag;
-import org.apache.commons.collections4.MultiValuedMap;
+import com.m3.collections.apache.Bag;
+import com.m3.collections.apache.MultiValuedMap;
 /** Opt-in collection bridge without changing Apache predicate/admission policy. */
 public final class M3CommonsStreams {
     private M3CommonsStreams() {}

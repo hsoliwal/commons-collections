@@ -4,8 +4,8 @@ package com.synexia.m3.commons;
 
 import java.util.List;
 import java.util.stream.Collectors;
-import org.apache.commons.collections4.bag.HashBag;
-import org.apache.commons.collections4.multimap.ArrayListValuedHashMap;
+import com.m3.collections.apache.bag.HashBag;
+import com.m3.collections.apache.multimap.ArrayListValuedHashMap;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 class M3CommonsStreamsTest {
