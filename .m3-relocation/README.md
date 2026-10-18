@@ -23,11 +23,17 @@ mvn -B -ntp org.openrewrite.maven:rewrite-maven-plugin:5.23.1:run \
   -Drewrite.activeRecipes=com.synexia.m3.RelocateApacheCommonsFork20261018
 ```
 
-Source before `org.apache.commons.collections4` -> after `com.m3.sdk.apache.commons.collections4`. Both package
+Source before `org.apache.commons.collections4` -> after `com.m3.collections.apache`. Both package
 declarations and Java type references must be rewritten through OpenRewrite's
-AST visitors. The current PR commits the recipe **but not yet its whole-fork
-generated postimages**. No source-relocation execution or donor tests are claimed
-until exact generated files have been checked back into the fork branch.
+AST visitors. The complete fork source and active metadata have now been relocated
+and verified locally. The unchanged full test suite completed with 22,257 tests,
+zero failures or errors, and 82 inherited conditional skips. The recorded run used
+Java 21 test compilation, the existing RAT diagnostic bypass, and a single 1024 MiB
+test JVM; see `m3/package-import-rename-20261018/FULL_TEST_RECEIPT.json` and
+`FINAL_REPORT.md` for exact scope, timing, and baseline caveats. Archive, module,
+JDK-only namespace smoke, and immutable-original queue differential checks passed.
+The later package Javadoc and unused proof-main refusal corrections have separate
+focused validation receipts; they do not claim a second full-suite execution.
 
 **Licensing:** original donor source remains under **Apache-2.0 and ASF NOTICE** including
 all retained copyright headers/NOTICE; this added recipe description is original

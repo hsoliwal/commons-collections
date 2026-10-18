@@ -122,7 +122,8 @@
        properties that depend on the componentid.
     -->
     <commons.componentid>collections</commons.componentid>
-    <commons.module.name>org.apache.commons.collections4</commons.module.name>
+    <commons.module.name>com.m3.collections.apache</commons.module.name>
+    <commons.osgi.export>com.m3.collections.apache*;version=${project.version};-noimport:=true</commons.osgi.export>
     <!-- Current 4.x release series -->
     <commons.release.version>4.6.1</commons.release.version>
     <commons.release.next>4.6.2</commons.release.next>
@@ -200,7 +201,7 @@
           <inputExcludes>
             <inputExclude>.asf.yaml</inputExclude>
             <inputExclude>site-content/**/*</inputExclude>
-            <inputExclude>src/test/resources/org/apache/commons/collections4/data/test/*</inputExclude>
+            <inputExclude>src/test/resources/com/m3/collections/apache/data/test/*</inputExclude>
           </inputExcludes>
         </configuration>
       </plugin>
@@ -238,7 +239,7 @@
         <configuration>
           <archive combine.children="append">
             <manifestEntries>
-              <Automatic-Module-Name>org.apache.commons.collections4</Automatic-Module-Name>
+              <Automatic-Module-Name>com.m3.collections.apache</Automatic-Module-Name>
             </manifestEntries>
           </archive>
         </configuration>
@@ -292,7 +293,7 @@
           <inputExcludes>
             <inputExclude>.asf.yaml</inputExclude>
             <inputExclude>site-content/**/*</inputExclude>
-            <inputExclude>src/test/resources/org/apache/commons/collections4/data/test/*</inputExclude>
+            <inputExclude>src/test/resources/com/m3/collections/apache/data/test/*</inputExclude>
           </inputExcludes>
         </configuration>
       </plugin>

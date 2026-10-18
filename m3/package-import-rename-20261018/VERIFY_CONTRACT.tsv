@@ -1,0 +1,14 @@
+key	value
+namespace_gate	SDK_EXECUTION.tsv; INPUT.tsv; CHANGES.tsv; PROMOTION.tsv
+implementation_gate	PRODUCTION_BODY_PRESERVATION.json: 367 production token sequences preserved after admitted namespace normalization
+complete_suite_gate	FULL_TEST_RECEIPT.json and immutable FULL_TEST_LOG.txt: 22257/0/0/82
+test_exclusions	NONE added
+rat_caveat	Five preexisting unapproved package-first metadata files; rat.skip=true only for diagnostic verification
+test_release_caveat	Existing package-first switch syntax requires testRelease=21; Java8 test compile is not claimed
+heap_caveat	512 MiB test fork exhausted memory at unchanged Bloom test; subsequent full run passed with 1024 MiB; original failure evidence retained
+archive_gate	ARCHIVE_VERIFICATION.json:635 relocated classes; automatic module and public OSGi exports; no original namespace runtime classes
+runtime_gate	STANDALONE_NAMESPACE_SMOKE.txt; JDK-only classpath
+differential_gate	ORIGINAL_QUEUE_WORKFLOW.txt; immutable original versus relocated,65711 checks
+review_gate	REVIEW_VALIDATION.json; 13-package reference doclint passes; strict proof compile and expected refusal
+review_snapshot_gate	REVIEW_JAVA_EXECUTION.tsv and REVIEW_README_EXECUTION.tsv: fixed point, drift/missing/duplicate controls; occupied not applicable to update-only crate
+validation_timing	Full suite and archive precede later Javadoc comments and unused main guard; no second full-suite/archive run is claimed

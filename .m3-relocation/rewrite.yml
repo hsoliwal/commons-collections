@@ -6,5 +6,5 @@ description: Preserve the original donor API in the original branch; isolated Ja
 recipeList:
   - org.openrewrite.java.ChangePackage:
       oldPackageName: org.apache.commons.collections4
-      newPackageName: com.m3.sdk.apache.commons.collections4
+      newPackageName: com.m3.collections.apache
       recursive: true

@@ -1,0 +1,10 @@
+key	value
+recipe	com.synexia.rewrite.M3CollectionsPackageRenameRecipe
+family	apache
+provider	org.openrewrite:rewrite-java:8.17.1
+java	21.0.12.1
+inputs	681
+changed	679
+batch_size	32
+fixed_point	PASS
+production_compile	NOT_CLAIMED

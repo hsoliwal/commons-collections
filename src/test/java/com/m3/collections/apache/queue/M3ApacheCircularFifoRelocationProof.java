@@ -41,7 +41,7 @@ public final class M3ApacheCircularFifoRelocationProof {
         }
     }
 
-    private static void parity(org.apache.commons.collections4.queue.CircularFifoQueue<Integer> donor,
+    private static void parity(com.m3.collections.apache.queue.CircularFifoQueue<Integer> donor,
             CircularFifoQueue<Integer> relocated, int limit, String label) {
         same(donor.size(), relocated.size(), label + " size");
         same(donor.isEmpty(), relocated.isEmpty(), label + " empty");
@@ -56,7 +56,7 @@ public final class M3ApacheCircularFifoRelocationProof {
         same(limit, relocated.maxSize(), label + " bound");
     }
     private static void removeOccurrence(
-            org.apache.commons.collections4.queue.CircularFifoQueue<Integer> donor,
+            com.m3.collections.apache.queue.CircularFifoQueue<Integer> donor,
             CircularFifoQueue<Integer> relocated, int ordinal) {
         Iterator<Integer> first = donor.iterator();
         Iterator<Integer> second = relocated.iterator();
@@ -67,8 +67,8 @@ public final class M3ApacheCircularFifoRelocationProof {
         second.remove();
     }
     private static void negativeCases() {
-        org.apache.commons.collections4.queue.CircularFifoQueue<Integer> a =
-                new org.apache.commons.collections4.queue.CircularFifoQueue<>(2);
+        com.m3.collections.apache.queue.CircularFifoQueue<Integer> a =
+                new com.m3.collections.apache.queue.CircularFifoQueue<>(2);
         CircularFifoQueue<Integer> b = new CircularFifoQueue<>(2);
         boolean aNull = false, bNull = false;
         try { a.add(null); } catch (NullPointerException ex) { aNull = true; }
@@ -81,7 +81,7 @@ public final class M3ApacheCircularFifoRelocationProof {
         same(true, aEmpty, "Apache empty remove");
         same(aEmpty, bEmpty, "relocated empty remove");
         boolean badCapA = false, badCapB = false;
-        try { new org.apache.commons.collections4.queue.CircularFifoQueue<Integer>(0); }
+        try { new com.m3.collections.apache.queue.CircularFifoQueue<Integer>(0); }
         catch (IllegalArgumentException ex) { badCapA = true; }
         try { new CircularFifoQueue<Integer>(0); }
         catch (IllegalArgumentException ex) { badCapB = true; }
@@ -91,8 +91,8 @@ public final class M3ApacheCircularFifoRelocationProof {
     private static void randomized() throws Exception {
         Random random = new Random(0x4d33434150414349L);
         for (int capacity : new int[] {1, 2, 3, 7, 16, 31, 64}) {
-            org.apache.commons.collections4.queue.CircularFifoQueue<Integer> donor =
-                    new org.apache.commons.collections4.queue.CircularFifoQueue<>(capacity);
+            com.m3.collections.apache.queue.CircularFifoQueue<Integer> donor =
+                    new com.m3.collections.apache.queue.CircularFifoQueue<>(capacity);
             CircularFifoQueue<Integer> relocated = new CircularFifoQueue<>(capacity);
             for (int iteration = 0; iteration < 800; iteration++) {
                 int choice = random.nextInt(8);
@@ -128,6 +128,9 @@ public final class M3ApacheCircularFifoRelocationProof {
 
     public static void main(String[] args) throws Exception {
         if (args.length != 0) throw new IllegalArgumentException("no arguments accepted");
+        if (com.m3.collections.apache.queue.CircularFifoQueue.class == CircularFifoQueue.class) {
+            throw new IllegalStateException("Refusing same-class differential proof; use the immutable original proof in the package-first workflow");
+        }
         negativeCases();
         randomized();
         System.out.println("PASS M3_APACHE_PACKAGE_RELOCATION checks=" + checks);

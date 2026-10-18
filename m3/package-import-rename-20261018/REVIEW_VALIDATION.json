@@ -1,0 +1,16 @@
+{
+  "status": "PASS",
+  "utc": "2026-10-18T08:42:11.525036+00:00",
+  "javadoc_packages": 13,
+  "javadoc_reference_errors": 0,
+  "proof_strict_compilation": "PASS",
+  "proof_main": "EXPECTED_NONZERO_SAME_CLASS_REFUSAL",
+  "java_snapshot_targets": 14,
+  "java_snapshot_fixedpoint": "PASS",
+  "java_snapshot_refusal_controls": 3,
+  "readme_snapshot_targets": 1,
+  "readme_snapshot_refusal_controls": 3,
+  "full_suite_rerun": false,
+  "timing": "Focused checks after full suite; full-suite sources predate only these Javadoc comments and the unused standalone main refusal guard. Original full test log unchanged.",
+  "genuine_differential": "Original immutable workflow remains unchanged by this review crate; prior ORIGINAL_QUEUE_WORKFLOW.txt records 65711 checks."
+}
