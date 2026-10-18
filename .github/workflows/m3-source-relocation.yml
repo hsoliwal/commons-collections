@@ -24,6 +24,13 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - name: Refuse unpinned donor source preimage before package transformation
+        run: |
+          set -eu
+          input="src/main/java/org/apache/commons/collections4/Bag.java"
+          expected="7105db142318aba3534b2de2714354463a3551b0"
+          actual="$(git hash-object "$input")"
+          test "$actual" = "$expected"
       - name: Dry run source-first OpenRewrite ChangePackage without changing fork source
         run: |
           set -eu
@@ -57,6 +64,13 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - name: Refuse unpinned donor source preimage before package transformation
+        run: |
+          set -eu
+          input="src/main/java/org/apache/commons/collections4/Bag.java"
+          expected="7105db142318aba3534b2de2714354463a3551b0"
+          actual="$(git hash-object "$input")"
+          test "$actual" = "$expected"
       - name: Apply the exact reviewed OpenRewrite recipe to fork branch only
         run: |
           set -eu
