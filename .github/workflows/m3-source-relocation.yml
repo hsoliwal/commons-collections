@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: Apache-2.0
+name: M3 staged ApacheCommons package relocation
+on:
+  pull_request:
+    paths:
+      - '.m3-relocation/**'
+      - '.github/workflows/m3-source-relocation.yml'
+  workflow_dispatch:
+jobs:
+  openrewrite-dryrun:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Source-first OpenRewrite Java LST dry run; leave fork source unchanged
+        run: |
+          set -eu
+          mvn -B -ntp org.openrewrite.maven:rewrite-maven-plugin:5.23.1:dryRun \
+            -Drewrite.configLocation=.m3-relocation/rewrite.yml \
+            -Drewrite.activeRecipes=com.synexia.m3.RelocateApacheCommonsFork20261018
+      - name: Retain generated reviewable patch for recipe admission
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m3-apachecommons-relocation-patch
+          if-no-files-found: warn
+          path: |
+            **/target/rewrite/rewrite.patch
+            **/target/rewrite/*.patch
