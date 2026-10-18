@@ -423,8 +423,15 @@ public class PredicatedCollection<E> extends AbstractCollectionDecorator<E> {
      */
     @Override
     public boolean addAll(final Collection<? extends E> coll) {
-        coll.forEach(this::validate);
-        return decorated().addAll(coll);
+        // M3 stable dynamic-array admission: validate and capture the same
+        // logical occurrences exactly once before the original owner writes.
+        // Do not reopen a lazy, aliased, or mutable incoming Collection.
+        final List<E> admitted = new ArrayList<>();
+        coll.forEach(value -> {
+            validate(value);
+            admitted.add(value);
+        });
+        return decorated().addAll(admitted);
     }
 
     /**
