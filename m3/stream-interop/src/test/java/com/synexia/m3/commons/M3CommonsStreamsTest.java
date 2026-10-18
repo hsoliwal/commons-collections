@@ -21,4 +21,14 @@ class M3CommonsStreamsTest {
         var bag = new HashBag<Integer>(); bag.add(9,3);
         assertEquals(3L,M3CommonsStreams.snapshotBag(bag).count());
     }
+
+    @Test void allIterableCollectionFamiliesUseTheSameOperators() {
+        var list = new java.util.ArrayList<>(List.of(4,4));
+        var snap = M3CommonsStreams.snapshotAny(list);
+        var live = M3CommonsStreams.liveAny(list);
+        list.add(5);
+        assertEquals(List.of(4,4),snap.collect(Collectors.toList()));
+        assertEquals(List.of(4,4,5),live.collect(Collectors.toList()));
+        assertEquals(List.of(8,8,10),live.map(v -> v*2).collect(Collectors.toList()));
+    }
 }

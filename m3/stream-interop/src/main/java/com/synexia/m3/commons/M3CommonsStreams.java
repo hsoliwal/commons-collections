@@ -18,4 +18,14 @@ public final class M3CommonsStreams {
     public static <T> M3ObjectStream<T> snapshotBag(Bag<T> bag) {
         return M3ObjectStream.snapshot(Objects.requireNonNull(bag, "bag"));
     }
+
+    /** Universal Iterable adapter for List, Set, Queue, Bag and other provider occurrences. */
+    public static <T> M3ObjectStream<T> snapshotAny(Iterable<? extends T> source) {
+        return M3ObjectStream.snapshot(Objects.requireNonNull(source, "source"));
+    }
+
+    /** Universal live adapter; encounter and fail-fast semantics remain provider-owned. */
+    public static <T> M3ObjectStream<T> liveAny(java.util.Collection<T> source) {
+        return M3ObjectStream.live(Objects.requireNonNull(source, "source"));
+    }
 }
