@@ -1,0 +1,21 @@
+// SPDX-FileCopyrightText: 2026 Hitesh Soliwal and Contributors to the Synexia Project
+// SPDX-License-Identifier: Apache-2.0
+package com.synexia.m3.commons;
+
+import com.m3.collections.M3ObjectStream;
+import java.util.Objects;
+import org.apache.commons.collections4.Bag;
+import org.apache.commons.collections4.MultiValuedMap;
+/** Opt-in collection bridge without changing Apache predicate/admission policy. */
+public final class M3CommonsStreams {
+    private M3CommonsStreams() {}
+    public static <K,V> M3ObjectStream<V> snapshotValues(MultiValuedMap<K,V> map,K key) {
+        return M3ObjectStream.snapshot(Objects.requireNonNull(map, "map").get(key));
+    }
+    public static <K,V> M3ObjectStream<V> liveValues(MultiValuedMap<K,V> map,K key) {
+        return M3ObjectStream.live(Objects.requireNonNull(map, "map").get(key));
+    }
+    public static <T> M3ObjectStream<T> snapshotBag(Bag<T> bag) {
+        return M3ObjectStream.snapshot(Objects.requireNonNull(bag, "bag"));
+    }
+}
