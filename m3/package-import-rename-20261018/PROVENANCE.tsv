@@ -1,0 +1,17 @@
+key	value
+donor_repo	https://github.com/hsoliwal/commons-collections
+donor_source_base	6404dfdfe553097bb934e044034abcec5a4dbdd0
+upstream_donor_pin	2d985c27e07bdcbb9516aea44b0dda3f3e487ced
+canonical_recipe_home	https://github.com/hsoliwal/com.synexia/tree/develop/synexia-openrewrite-recipes
+canonical_snapshot_engine_base	140c263a90f9803b9c46103c63355a286e0515f0
+namespace_owner	com.synexia.rewrite.M3CollectionsPackageRenameRecipe; delegates to org.openrewrite.java.ChangePackage
+java_literal_owner	com.synexia.rewrite.M3CollectionsPackageRenameMetadataRecipe
+xml_text_resource_owner	com.synexia.rewrite.M3CollectionsPackageRenameResourcesCli
+java_snapshot_owner	com.synexia.rewrite.M3HashPinnedJavaSnapshotRecipe; thin M3CollectionsPackageRenameSnapshotCli
+pom_snapshot_owner	com.synexia.rewrite.M3HashPinnedPomSnapshotRecipe; thin M3CollectionsPackageRenamePomSnapshotCli
+text_snapshot_owner	com.synexia.rewrite.M3HashPinnedTextSnapshotRecipe; thin M3CollectionsPackageRenameTextSnapshotCli
+provider	org.openrewrite:rewrite-java:8.17.1
+review_java_crate	com/synexia/rewrite/hash-pinned-java/commons-package-rename-review-20261018/manifest.tsv
+review_readme_crate	com/synexia/rewrite/hash-pinned-text/commons-package-rename-review-readme-20261018/manifest.tsv
+proof_original	Immutable original oracle and owners extracted at 6404dfdfe553097bb934e044034abcec5a4dbdd0; ORIGINAL_QUEUE_WORKFLOW.txt records 65711 checks
+fixture_custody	197 binary resources moved with identical SHA256; test-only descriptor resolution, no production wire-identity claim

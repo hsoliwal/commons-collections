@@ -14,6 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -21,12 +23,24 @@ jobs:
       - name: Exact original and canonical generated output hashes
         run: |
           set -eu
-          SRC=src/main/java/org/apache/commons/collections4
+          SRC=target/m3-original-source/src/main/java/org/apache/commons/collections4
           OUT=src/main/java/com/m3/collections/apache
           Q=m3/package-first/apache-circular-20261018/recipe
           python3 - <<'PY'
           from pathlib import Path
-          src=Path('src/main/java/org/apache/commons/collections4')
+          import hashlib
+          import subprocess
+          pin='6404dfdfe553097bb934e044034abcec5a4dbdd0'
+          legacy=Path('target/m3-original-source')
+          source_paths=[
+              'src/main/java/org/apache/commons/collections4/BoundedCollection.java',
+              'src/main/java/org/apache/commons/collections4/queue/CircularFifoQueue.java',
+              'src/test/java/com/m3/collections/apache/queue/M3ApacheCircularFifoRelocationProof.java']
+          for relative in source_paths:
+              output=legacy/relative
+              output.parent.mkdir(parents=True,exist_ok=True)
+              output.write_bytes(subprocess.check_output(['git','show',pin+':'+relative]))
+          src=legacy/'src/main/java/org/apache/commons/collections4'
           out=Path('src/main/java/com/m3/collections/apache')
           a=(src/'BoundedCollection.java').read_text(encoding='utf-8')
           b=(src/'queue/CircularFifoQueue.java').read_text(encoding='utf-8')
@@ -36,16 +50,20 @@ jobs:
               'package org.apache.commons.collections4.queue;', 'package com.m3.collections.apache.queue;'
           ).replace('import org.apache.commons.collections4.BoundedCollection;',
                     'import com.m3.collections.apache.BoundedCollection;')
-          print('PASS exact package/import-only relocation; all method bodies unchanged')
+          q=Path('m3/package-first/apache-circular-20261018/recipe')
+          for line in (q/'manifest.tsv').read_text().splitlines():
+              target,before_hash,after_hash,template=line.split('\t')
+              current=(legacy/target if target.endswith('M3ApacheCircularFifoRelocationProof.java') else Path(target))
+              assert hashlib.sha256(current.read_bytes()).hexdigest()==after_hash,target
+          print('PASS pinned original owners and genuine original-versus-relocated oracle; bodies unchanged')
           PY
-          awk -F '\t' '{print $3 "  " $1}' "$Q/manifest.tsv" | sha256sum -c -
           awk -F '\t' -v q="$Q" '{print $3 "  " q "/" $4}' "$Q/manifest.tsv" | sha256sum -c -
       - name: Compile actual original plus relocated Java21 owners
         run: |
           set -eu
-          SRC=src/main/java/org/apache/commons/collections4
+          SRC=target/m3-original-source/src/main/java/org/apache/commons/collections4
           OUT=src/main/java/com/m3/collections/apache
-          TST=src/test/java/com/m3/collections/apache/queue
+          TST=target/m3-original-source/src/test/java/com/m3/collections/apache/queue
           mkdir -p target/m3-relocation/classes
           javac --release 21 -proc:none -Xlint:all,-this-escape,-serial -Werror \
             -d target/m3-relocation/classes \

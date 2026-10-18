@@ -1,0 +1,9 @@
+{
+  "source_repository": "hsoliwal/com.synexia",
+  "source_ref": "140c263a90f9803b9c46103c63355a286e0515f0",
+  "blobs": {
+    "M3HashPinnedJavaSnapshotRecipe": "3bdeeaea9a212fe0c7d1f544510f87c4cd49eb40",
+    "M3EditScope": "274360816db1e44a2f1796a3bc5cdeff6b0ce6db",
+    "M3ScopeInference": "d24729950508857280ea1b56d4e930f05137ec85"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "schema": "M3_EXACT_RELOCATED_FIXTURE_SNAPSHOT_V1",
+  "recipe": "com.synexia.rewrite.M3HashPinnedJavaSnapshotRecipe",
+  "crate": "commons-package-rename-fixtures-20261018",
+  "preserves_original_binary_fixtures": true,
+  "outputs": [
+    {
+      "path": "src/test/java/com/m3/collections/apache/AbstractObjectTest.java",
+      "before_sha256": "42d2ac48c9a8138fbe71305f3fa538ee5b378b2000bb3bc188ebc01b3568d8ef",
+      "after_sha256": "22829704341215e5197b8ece0fbb6ad480a8e6fc7f50fe54a958f50b1005f25b",
+      "template": "AbstractObjectTest.java.txt"
+    },
+    {
+      "path": "src/test/java/com/m3/collections/apache/BulkTest.java",
+      "before_sha256": "d5890198ecb12315261679574650ba0c52f4754277fede21dc61bcacfc431f99",
+      "after_sha256": "e3cc4b4c7b2de06a073d8cb52098c27f24e7864949ff509fbded9dce3ad8e6b6",
+      "template": "BulkTest.java.txt"
+    },
+    {
+      "path": "src/test/java/com/m3/collections/apache/RelocatedFixtureObjectInputStream.java",
+      "before_sha256": "ABSENT",
+      "after_sha256": "d0a659eb4a6c4d3364c4bef30229452a2be406dd4e89b385c72342a727e8240d",
+      "template": "RelocatedFixtureObjectInputStream.java.txt"
+    }
+  ]
+}

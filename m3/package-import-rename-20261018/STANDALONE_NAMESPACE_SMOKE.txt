@@ -1,0 +1,8 @@
+m3/package-import-rename-20261018/StandaloneNamespaceSmoke.java:16: warning: [deprecation] HashBag in com.m3.collections.apache.bag has been deprecated
+        final HashBag<String> bag = new HashBag<>();
+              ^
+m3/package-import-rename-20261018/StandaloneNamespaceSmoke.java:16: warning: [deprecation] HashBag in com.m3.collections.apache.bag has been deprecated
+        final HashBag<String> bag = new HashBag<>();
+                                        ^
+2 warnings
+standalone_jar_namespace_smoke=PASS collections=7 original_namespace=ABSENT

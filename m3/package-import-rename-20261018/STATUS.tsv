@@ -1,0 +1,11 @@
+key	value
+schema	M3_COMMONS_STATUS_V1
+status	COMPLETE_VERIFIED_LOCAL
+frozen_utc	2026-10-18T08:43:11.541962+00:00
+namespace	org.apache.commons.collections4 -> com.m3.collections.apache (recursive)
+full_suite	PASS: 22257 tests; 0 failures; 0 errors; 82 inherited conditional skips
+review_followups	PASS; REVIEW_VALIDATION.json
+default_lifecycle	Not claimed; preexisting RAT failures and Java8 proof compile issue require documented diagnostic overrides
+original_full_baseline	Not completed; interrupted for shared-host resource pressure
+remote_writes	NONE
+publication	Parent-owned; local review handoff only

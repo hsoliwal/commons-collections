@@ -1,0 +1,53 @@
+{
+  "schema": "M3_COMMONS_FINAL_STATUS_V1",
+  "status": "COMPLETE_VERIFIED_LOCAL",
+  "base_preserved": "a004341c18470deb6c7779e70854c96bda954fdb",
+  "mapping": {
+    "old": "org.apache.commons.collections4",
+    "new": "com.m3.collections.apache",
+    "recursive": true,
+    "class_and_method_names": "unchanged"
+  },
+  "production_sources": 367,
+  "test_sources": 313,
+  "archive_classes": 635,
+  "namespace_recipe_inputs": 681,
+  "namespace_recipe_changes": 679,
+  "immutable_resources_moved": 197,
+  "production_body_tokens": "367 of 367 match after namespace normalization",
+  "full_suite": {
+    "tests": 22257,
+    "failures": 0,
+    "errors": 0,
+    "conditional_skips": 82
+  },
+  "genuine_original_queue_comparison": {
+    "original_ref": "6404dfdfe553097bb934e044034abcec5a4dbdd0",
+    "checks": 65711,
+    "original_source_location": "target/m3-original-source only; no original production runtime dependency"
+  },
+  "archive": "ARCHIVE_VERIFICATION.json",
+  "test_receipt": "FULL_TEST_RECEIPT.json",
+  "standalone_runtime": "STANDALONE_NAMESPACE_SMOKE.txt",
+  "default_lifecycle_limitation": "Five preexisting RAT metadata license failures; Java21 test release required by existing proof",
+  "documentation_residue": [],
+  "remote_writes": "NONE",
+  "html_metadata_qualification": {
+    "tests": 6,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "scope": "Only exact src/main/javadoc/overview.html; other HTML refused"
+  },
+  "source_evidence_frozen": true,
+  "review_followups": {
+    "receipt": "REVIEW_VALIDATION.json",
+    "status": "PASS",
+    "javadoc_packages": 13,
+    "same_class_main": "REFUSES",
+    "readme": "CURRENT_COMPLETION",
+    "full_suite_rerun": false,
+    "utc": "2026-10-18T08:43:11.541962+00:00"
+  },
+  "frozen_utc": "2026-10-18T08:43:11.541962+00:00"
+}

@@ -28,7 +28,7 @@
 
   <!--  explicit return of a null value for type Boolean is intended -->
   <Match>
-    <Class name="org.apache.commons.collections4.MapUtils" />
+    <Class name="com.m3.collections.apache.MapUtils" />
     <Method name="getBoolean" params="java.util.Map, java.lang.Object" returns="java.lang.Boolean" />
     <Bug pattern="NP_BOOLEAN_RETURN_NULL" />
   </Match>
@@ -49,28 +49,28 @@
   <!-- TreeBidiMap implements equals by delegating to another method for re-usability -->
   <Match>
     <Or>
-      <Class name="org.apache.commons.collections4.bidimap.TreeBidiMap" />
-      <Class name="org.apache.commons.collections4.bidimap.TreeBidiMap$Inverse" />
+      <Class name="com.m3.collections.apache.bidimap.TreeBidiMap" />
+      <Class name="com.m3.collections.apache.bidimap.TreeBidiMap$Inverse" />
     </Or>
     <Bug pattern="EQ_UNUSUAL" />
   </Match>
 
   <!-- Access to field inverse is 100% synchronized, findbugs may be inaccurate for this check -->
   <Match>
-    <Class name="org.apache.commons.collections4.bidimap.UnmodifiableBidiMap" />
+    <Class name="com.m3.collections.apache.bidimap.UnmodifiableBidiMap" />
     <Bug pattern="IS2_INCONSISTENT_SYNC" />
   </Match>
 
   <!-- The compare method in ComparatorChain has to handle a corner-case for Integer.MIN_VALUE -->
   <Match>
-    <Class name="org.apache.commons.collections4.comparators.ComparatorChain" />
+    <Class name="com.m3.collections.apache.comparators.ComparatorChain" />
     <Method name="compare" params="java.lang.Object, java.lang.Object" returns="int" />
     <Bug pattern="RV_CHECK_COMPARETO_FOR_SPECIFIC_RETURN_VALUE" />
   </Match>
 
   <!-- The ObjectArrayIterator does iterate over an array, thus we do not want to copy it -->
   <Match>
-    <Class name="org.apache.commons.collections4.iterators.ObjectArrayIterator" />
+    <Class name="com.m3.collections.apache.iterators.ObjectArrayIterator" />
     <Or>
       <Bug pattern="EI_EXPOSE_REP" />
       <Bug pattern="EI_EXPOSE_REP2" />
@@ -79,14 +79,14 @@
 
   <!-- The constructor has a boolean argument which controls whether the array shall be copied or not -->
   <Match>
-    <Class name="org.apache.commons.collections4.keyvalue.MultiKey" />
+    <Class name="com.m3.collections.apache.keyvalue.MultiKey" />
     <Method name="&lt;init&gt;" params="java.lang.Object[], boolean" returns="void" />
     <Bug pattern="EI_EXPOSE_REP2" />
   </Match>
 
   <!-- The unread field is used to make a hard reference to ensure the value will not be gc'ed -->
   <Match>
-    <Class name="org.apache.commons.collections4.map.AbstractReferenceMap$ReferenceBaseIterator" />
+    <Class name="com.m3.collections.apache.map.AbstractReferenceMap$ReferenceBaseIterator" />
     <Bug pattern="URF_UNREAD_FIELD" />
   </Match>
 

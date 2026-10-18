@@ -27,8 +27,8 @@ jobs:
       - name: Refuse unpinned donor source preimage before package transformation
         run: |
           set -eu
-          input="src/main/java/org/apache/commons/collections4/Bag.java"
-          expected="7105db142318aba3534b2de2714354463a3551b0"
+          input="src/main/java/com/m3/collections/apache/Bag.java"
+          expected="5ed4f6a01a8291961cd85df0be8bf0bfdfdfc5f3"
           actual="$(git hash-object "$input")"
           test "$actual" = "$expected"
       - name: Dry run source-first OpenRewrite ChangePackage without changing fork source
@@ -67,8 +67,8 @@ jobs:
       - name: Refuse unpinned donor source preimage before package transformation
         run: |
           set -eu
-          input="src/main/java/org/apache/commons/collections4/Bag.java"
-          expected="7105db142318aba3534b2de2714354463a3551b0"
+          input="src/main/java/com/m3/collections/apache/Bag.java"
+          expected="5ed4f6a01a8291961cd85df0be8bf0bfdfdfc5f3"
           actual="$(git hash-object "$input")"
           test "$actual" = "$expected"
       - name: Apply the exact reviewed OpenRewrite recipe to fork branch only
@@ -82,8 +82,8 @@ jobs:
       - name: Refuse non-materialized or partial package move
         run: |
           set -eu
-          before_count="$(git ls-files 'src/main/java/org/apache/commons/collections4/*' | grep -c '\.java$' || true)"
-          after_count="$(find 'src/main/java/com/m3/sdk/apache/commons/collections4' -type f -name '*.java' | wc -l)"
+          before_count="$(git ls-files 'src/main/java/com/m3/collections/apache/*' | grep -c '\.java$' || true)"
+          after_count="$(find 'src/main/java/com/m3/collections/apache' -type f -name '*.java' | wc -l)"
           old_remaining="$(find 'src/main/java/org/apache/commons/collections4' -type f -name '*.java' 2>/dev/null | wc -l)"
           echo "source_count=$before_count transformed_count=$after_count old_remaining=$old_remaining"
           test "$before_count" -gt 0
