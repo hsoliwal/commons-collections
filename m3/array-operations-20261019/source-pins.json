@@ -1,0 +1,13 @@
+[
+  {
+    "repository": "hsoliwal/commons-collections",
+    "commit": "13586e6bbbfed0f946c03ddaac62c8a1853ce12b",
+    "path": "src/main/java/com/m3/collections/apache/queue/CircularFifoQueue.java",
+    "beforeSha256": "a93526672443ce20662aa44b528e90d1b739e30ed9b33078e1ff3473f64f1e97",
+    "afterSha256": "4cdf1a83bdb4da74b1dc0b2dddbc0ddd6ce60fff79a59221b215f1b3b3d09315",
+    "template": "CircularFifoQueue.java.txt",
+    "recipe": "m3-array-operations-commons-collections-20261019",
+    "license": "Apache-2.0",
+    "status": "SEALED_CANDIDATE_NOT_RUNTIME_ADMITTED"
+  }
+]

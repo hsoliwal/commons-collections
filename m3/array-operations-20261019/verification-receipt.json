@@ -1,0 +1,11 @@
+{
+  "sourcePr": "https://github.com/hsoliwal/com.synexia/pull/12484",
+  "sourceCommit": "da475085ca326d91e20314c2fd7f895accc2b6cc",
+  "base": "13586e6bbbfed0f946c03ddaac62c8a1853ce12b",
+  "behavior": "6,849,617 checks per version against an independent FIFO oracle, including wrapped storage, iterator removals, serialization, subclass hooks and repeated reuse. Sparse large-capacity clear is much faster in the initial JMH run; full 8-slot refill+clear was 17.18 -> 19.58 ns/op in the focused run, with overlapping intervals. Backing storage is unchanged.",
+  "hold": "HELD: tiny dense nonregression and strict improvements to both space and time are unproven. Native Maven compile stops at existing RAT unapproved files. The previously rejected iterator bulk-shift candidate is not included.",
+  "sdk": "PASS_15_TESTS_EXACT_POSTIMAGES_AND_FIXED_POINT",
+  "api": "FULL_FIELD_METHOD_DESCRIPTORS_IDENTICAL",
+  "nativeGate": "FAIL_BASELINE_RAT_UNAPPROVED_FILES",
+  "allForksComplete": false
+}

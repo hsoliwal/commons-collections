@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+// Array-operation contribution: Copyright (c) 2026 Hitesh Soliwal and Synexia contributors.
 // Modified 2026 by Hitesh Soliwal and Contributors to the Synexia Project:
 // bounded contiguous-span compaction of the existing array-owned ring.
 package com.m3.collections.apache.queue;
@@ -148,10 +149,18 @@ public class CircularFifoQueue<E> extends AbstractCollection<E>
      */
     @Override
     public void clear() {
+        // Free slots are already null; use the existing ring indices to release live payloads.
+        if (full) {
+            Arrays.fill(elements, null);
+        } else if (start < end) {
+            Arrays.fill(elements, start, end, null);
+        } else if (start > end) {
+            Arrays.fill(elements, start, maxElements, null);
+            Arrays.fill(elements, 0, end, null);
+        }
         full = false;
         start = 0;
         end = 0;
-        Arrays.fill(elements, null);
     }
 
     /**
