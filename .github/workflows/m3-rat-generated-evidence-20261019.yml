@@ -1,0 +1,47 @@
+# SPDX-License-Identifier: Apache-2.0
+name: M3 generated evidence RAT qualification
+on:
+  pull_request:
+    paths:
+      - 'pom.xml'
+      - 'm3/RAT_GENERATED_EVIDENCE_EXCLUSION_20261019.md'
+      - '.github/workflows/m3-rat-generated-evidence-20261019.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  apache-rat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Verify RAT excludes only qualified evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          root=ET.parse("pom.xml").getroot()
+          ns={"m":"http://maven.apache.org/POM/4.0.0"}
+          rat=[p for p in root.findall(".//m:plugin", ns)
+               if p.findtext("m:artifactId", namespaces=ns)=="apache-rat-plugin"]
+          assert len(rat)>=2, f"missing build/reporting RAT configurations: {len(rat)}"
+          expected={
+            "m3/package-first/apache-circular-20261018/**/*",
+            "m3/package-import-rename-20261018/**/*",
+            "m3/stream-interop/**/*",
+            "m3/workspaces/long-path-input-budget-20261018/**/*",
+            "tools/m3scale/README.md",
+          }
+          for plugin in rat:
+              actual={e.text for e in plugin.findall(".//m:inputExclude",ns)}
+              assert expected<=actual, f"missing evidence patterns: {expected-actual}"
+              assert not any(p.startswith(("src/main/", "src/test/java/")) for p in actual), actual
+          print("PASS narrow RAT evidence-only exclusions in build and reporting configurations")
+          PY
+          mvn -B -ntp apache-rat:check

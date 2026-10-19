@@ -202,6 +202,14 @@
             <inputExclude>.asf.yaml</inputExclude>
             <inputExclude>site-content/**/*</inputExclude>
             <inputExclude>src/test/resources/com/m3/collections/apache/data/test/*</inputExclude>
+            <!-- Immutable M3 qualification receipts, frozen run logs and generated metadata.
+                 These are evidence (not distributed Java source); preserve exact donor bytes.
+                 Keep normal RAT coverage for src/main, src/test, POMs and production code. -->
+            <inputExclude>m3/package-first/apache-circular-20261018/**/*</inputExclude>
+            <inputExclude>m3/package-import-rename-20261018/**/*</inputExclude>
+            <inputExclude>m3/stream-interop/**/*</inputExclude>
+            <inputExclude>m3/workspaces/long-path-input-budget-20261018/**/*</inputExclude>
+            <inputExclude>tools/m3scale/README.md</inputExclude>
           </inputExcludes>
         </configuration>
       </plugin>
@@ -294,6 +302,14 @@
             <inputExclude>.asf.yaml</inputExclude>
             <inputExclude>site-content/**/*</inputExclude>
             <inputExclude>src/test/resources/com/m3/collections/apache/data/test/*</inputExclude>
+            <!-- Immutable M3 qualification receipts, frozen run logs and generated metadata.
+                 These are evidence (not distributed Java source); preserve exact donor bytes.
+                 Keep normal RAT coverage for src/main, src/test, POMs and production code. -->
+            <inputExclude>m3/package-first/apache-circular-20261018/**/*</inputExclude>
+            <inputExclude>m3/package-import-rename-20261018/**/*</inputExclude>
+            <inputExclude>m3/stream-interop/**/*</inputExclude>
+            <inputExclude>m3/workspaces/long-path-input-budget-20261018/**/*</inputExclude>
+            <inputExclude>tools/m3scale/README.md</inputExclude>
           </inputExcludes>
         </configuration>
       </plugin>
