@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: Apache-2.0
+name: M3 Java 8 circular proof compatibility
+
+on:
+  pull_request:
+    paths:
+      - 'src/test/java/com/m3/collections/apache/queue/M3ApacheCircularFifoRelocationProof.java'
+      - 'm3/recipes/java8-circular-queue-switch/**'
+      - '.github/workflows/m3-java8-circular-proof-compat.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  java8-compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Diff hygiene
+        run: git diff --check
+      - name: Source-sealed recipe fixed point
+        run: |
+          java m3/recipes/java8-circular-queue-switch/Java8CircularQueueSwitchRecipe.java \
+            --check src/test/java/com/m3/collections/apache/queue/M3ApacheCircularFifoRelocationProof.java
+      - name: Compile original Java 8 source-level tests
+        run: mvn -B -ntp -Drat.skip=true -DskipTests test-compile
+      - name: Focused circular queue tests
+        run: mvn -B -ntp -Drat.skip=true -Dtest=CircularFifoQueueTest -DfailIfNoTests=false test
