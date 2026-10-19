@@ -97,26 +97,33 @@ public final class M3ApacheCircularFifoRelocationProof {
             for (int iteration = 0; iteration < 800; iteration++) {
                 int choice = random.nextInt(8);
                 switch (choice) {
-                    case 0, 1, 2 -> {
+                    case 0:
+                    case 1:
+                    case 2: {
                         int value = random.nextInt(21) - 10;
                         same(donor.add(value), relocated.add(value), "add");
+                        break;
                     }
-                    case 3 -> same(donor.poll(), relocated.poll(), "poll");
-                    case 4 -> {
+                    case 3:
+                        same(donor.poll(), relocated.poll(), "poll");
+                        break;
+                    case 4:
                         if (!donor.isEmpty()) {
                             same(donor.remove(), relocated.remove(), "remove");
                         }
-                    }
-                    case 5 -> {
+                        break;
+                    case 5:
                         if (random.nextInt(11) == 0) {donor.clear();relocated.clear();}
-                    }
-                    case 6 -> {
+                        break;
+                    case 6:
                         if (!donor.isEmpty()) {
                             int which = random.nextInt(donor.size());
                             removeOccurrence(donor, relocated, which);
                         }
-                    }
-                    default -> { if (!donor.isEmpty()) same(donor.element(), relocated.element(), "element"); }
+                        break;
+                    default:
+                        if (!donor.isEmpty()) same(donor.element(), relocated.element(), "element");
+                        break;
                 }
                 parity(donor, relocated, capacity, "capacity=" + capacity + " step=" + iteration);
                 if (iteration % 97 == 0) {
