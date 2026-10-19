@@ -1,0 +1,3 @@
+# path	before-sha256	after-sha256	template
+m3/stream-interop/src/main/java/com/synexia/m3/commons/M3CommonsStreams.java	ABSENT	5c3b8104c87698a9ed9c02891e8650e7882056ec9469d76ce7eb71a8947f3ab8	M3CommonsStreams.java.txt
+m3/stream-interop/src/test/java/com/synexia/m3/commons/M3CommonsStreamsTest.java	ABSENT	6555095c1815da512c0e1ef04d6969e4dda5636220ca583a79688194ccbf274b	M3CommonsStreamsTest.java.txt
