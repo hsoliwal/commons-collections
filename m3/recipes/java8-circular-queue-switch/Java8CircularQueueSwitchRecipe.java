@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 // Source-time recipe tool. Deliberately outside src/ so Java 8 production builds are unchanged.
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -72,10 +71,13 @@ public final class Java8CircularQueueSwitchRecipe {
     private Java8CircularQueueSwitchRecipe() {}
 
     static String rewrite(String source) {
-        int oldCount = count(source, BEFORE);
-        int newCount = count(source, AFTER);
+        // Java text blocks remove common indentation; restore the 16-column source anchor.
+        String before = BEFORE.indent(16);
+        String after = AFTER.indent(16);
+        int oldCount = count(source, before);
+        int newCount = count(source, after);
         if (oldCount == 1 && newCount == 0) {
-            return source.replace(BEFORE, AFTER);
+            return source.replace(before, after);
         }
         if (oldCount == 0 && newCount == 1) {
             return source; // mechanical fixed point
