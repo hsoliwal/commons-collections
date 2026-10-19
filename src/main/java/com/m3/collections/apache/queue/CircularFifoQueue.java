@@ -14,6 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+// Modified 2026 by Hitesh Soliwal and Contributors to the Synexia Project:
+// bounded contiguous-span compaction of the existing array-owned ring.
 package com.m3.collections.apache.queue;
 
 import java.io.IOException;
@@ -283,22 +285,7 @@ public class CircularFifoQueue<E> extends AbstractCollection<E>
                     return;
                 }
 
-                int pos = lastReturnedIndex + 1;
-                if (start < lastReturnedIndex && pos < end) {
-                    // shift in one part
-                    System.arraycopy(elements, pos, elements, lastReturnedIndex, end - pos);
-                } else {
-                    // Other elements require us to shift the subsequent elements
-                    while (pos != end) {
-                        if (pos >= maxElements) {
-                            elements[pos - 1] = elements[0];
-                            pos = 0;
-                        } else {
-                            elements[decrement(pos)] = elements[pos];
-                            pos = increment(pos);
-                        }
-                    }
-                }
+                shiftSuffixTowardRemovedSlot(lastReturnedIndex);
 
                 lastReturnedIndex = -1;
                 end = decrement(end);
@@ -395,6 +382,25 @@ public class CircularFifoQueue<E> extends AbstractCollection<E>
             full = false;
         }
         return element;
+    }
+
+    /**
+     * Shifts the remaining suffix into an iterator's removed slot using the
+     * ring's contiguous array spans. The caller owns cursor and end-state updates.
+     *
+     * @param removedIndex The physical slot removed by the iterator.
+     */
+    private void shiftSuffixTowardRemovedSlot(final int removedIndex) {
+        final int following = removedIndex + 1;
+        if (following < end) {
+            System.arraycopy(elements, following, elements, removedIndex, end - following);
+        } else if (following > end) {
+            System.arraycopy(elements, following, elements, removedIndex, maxElements - following);
+            if (end > 0) {
+                elements[maxElements - 1] = elements[0];
+                System.arraycopy(elements, 1, elements, 0, end - 1);
+            }
+        }
     }
 
     /**

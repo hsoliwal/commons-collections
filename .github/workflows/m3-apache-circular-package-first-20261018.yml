@@ -1,10 +1,17 @@
 # SPDX-License-Identifier: Apache-2.0
-name: M3 package-first Apache circular FIFO source parity
+name: M3 Apache array storage and original source parity
 on:
   pull_request:
     paths:
       - 'src/main/java/com/m3/collections/apache/BoundedCollection.java'
       - 'src/main/java/com/m3/collections/apache/queue/CircularFifoQueue.java'
+      - 'src/main/java/com/m3/collections/apache/iterators/IteratorChain.java'
+      - 'src/main/java/com/m3/collections/apache/iterators/PermutationIterator.java'
+      - 'src/test/java/com/m3/collections/apache/M3ArrayStorageOracle.java'
+      - 'src/test/java/com/m3/collections/apache/iterators/*ArrayStorageTest.java'
+      - 'src/test/java/com/m3/collections/apache/queue/*ArrayStorageTest.java'
+      - 'src/test/resources/m3/array-storage-20261019/**'
+      - 'm3/array-storage-20261019/**'
       - 'src/test/java/com/m3/collections/apache/queue/M3ApacheCircularFifoRelocationProof.java'
       - 'm3/package-first/apache-circular-20261018/**'
       - '.github/workflows/m3-apache-circular-package-first-20261018.yml'
@@ -20,7 +27,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - name: Exact original and canonical generated output hashes
+      - name: Exact original, historical relocation and current SDK output hashes
         run: |
           set -eu
           SRC=target/m3-original-source/src/main/java/org/apache/commons/collections4
@@ -31,6 +38,7 @@ jobs:
           import hashlib
           import subprocess
           pin='6404dfdfe553097bb934e044034abcec5a4dbdd0'
+          predecessor='13586e6bbbfed0f946c03ddaac62c8a1853ce12b'
           legacy=Path('target/m3-original-source')
           source_paths=[
               'src/main/java/org/apache/commons/collections4/BoundedCollection.java',
@@ -46,19 +54,32 @@ jobs:
           b=(src/'queue/CircularFifoQueue.java').read_text(encoding='utf-8')
           assert (out/'BoundedCollection.java').read_text(encoding='utf-8') == a.replace(
               'package org.apache.commons.collections4;', 'package com.m3.collections.apache;')
-          assert (out/'queue/CircularFifoQueue.java').read_text(encoding='utf-8') == b.replace(
+          historical_queue=subprocess.check_output(['git','show',predecessor+':'+str(out/'queue/CircularFifoQueue.java')])
+          assert historical_queue.decode('utf-8') == b.replace(
               'package org.apache.commons.collections4.queue;', 'package com.m3.collections.apache.queue;'
           ).replace('import org.apache.commons.collections4.BoundedCollection;',
                     'import com.m3.collections.apache.BoundedCollection;')
           q=Path('m3/package-first/apache-circular-20261018/recipe')
           for line in (q/'manifest.tsv').read_text().splitlines():
               target,before_hash,after_hash,template=line.split('\t')
-              current=(legacy/target if target.endswith('M3ApacheCircularFifoRelocationProof.java') else Path(target))
-              assert hashlib.sha256(current.read_bytes()).hexdigest()==after_hash,target
-          print('PASS pinned original owners and genuine original-versus-relocated oracle; bodies unchanged')
+              if target.endswith('M3ApacheCircularFifoRelocationProof.java'):
+                  historical=(legacy/target).read_bytes()
+              else:
+                  historical=subprocess.check_output(['git','show',predecessor+':'+target])
+              assert hashlib.sha256(historical).hexdigest()==after_hash,target
+          receipt=Path('m3/array-storage-20261019/SOURCE_SHA256.tsv')
+          for line in receipt.read_text(encoding='utf-8').splitlines():
+              if not line or line.startswith('#'):
+                  continue
+              target,before_hash,after_hash=line.split('\t')
+              assert hashlib.sha256(Path(target).read_bytes()).hexdigest()==after_hash,target
+              if before_hash != 'ABSENT':
+                  before=subprocess.check_output(['git','show',predecessor+':'+target])
+                  assert hashlib.sha256(before).hexdigest()==before_hash,target
+          print('PASS immutable original and historical relocation; exact current array-storage source seals')
           PY
           awk -F '\t' -v q="$Q" '{print $3 "  " q "/" $4}' "$Q/manifest.tsv" | sha256sum -c -
-      - name: Compile actual original plus relocated Java21 owners
+      - name: Compile actual original plus received Java21 owners
         run: |
           set -eu
           SRC=target/m3-original-source/src/main/java/org/apache/commons/collections4
@@ -72,3 +93,16 @@ jobs:
             "$TST/M3ApacheCircularFifoRelocationProof.java"
           java -ea -cp target/m3-relocation/classes \
             com.m3.collections.apache.queue.M3ApacheCircularFifoRelocationProof
+      - name: Strict Apache RAT license gate
+        env:
+          MAVEN_OPTS: -Xmx768m
+        run: mvn -B -ntp apache-rat:check
+      - name: Original owning behavior tests and independent retained-storage oracles
+        if: always()
+        env:
+          MAVEN_OPTS: -Xmx768m
+        run: |
+          mvn -B -ntp -Drat.skip=true -Dmaven.compiler.testRelease=21 -DforkCount=1 -DreuseForks=true \
+            -DargLine=-Xmx768m \
+            -Dtest=IteratorChainTest,IteratorChainArrayStorageTest,PermutationIteratorTest,PermutationIteratorArrayStorageTest,CircularFifoQueueTest,CircularFifoQueueArrayStorageTest \
+            test
