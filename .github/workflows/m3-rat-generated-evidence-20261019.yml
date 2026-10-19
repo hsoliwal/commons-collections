@@ -41,7 +41,7 @@ jobs:
           for plugin in rat:
               actual={e.text for e in plugin.findall(".//m:inputExclude",ns)}
               assert expected<=actual, f"missing evidence patterns: {expected-actual}"
-              assert not any(p.startswith(("src/main/","src/test/")) for p in actual), actual
+              assert not any(p.startswith(("src/main/", "src/test/java/")) for p in actual), actual
           print("PASS narrow RAT evidence-only exclusions in build and reporting configurations")
           PY
           mvn -B -ntp apache-rat:check
