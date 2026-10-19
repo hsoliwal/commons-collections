@@ -14,20 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+// Modified 2026 by Hitesh Soliwal and Contributors to the Synexia Project:
+// array slot/index/mask lowering of the existing ranked, threaded AVL algorithm.
 package com.m3.collections.apache.list;
 
 import java.util.AbstractList;
-import java.util.ArrayDeque;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.ConcurrentModificationException;
-import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 
-import com.m3.collections.apache.CollectionUtils;
 import com.m3.collections.apache.OrderedIterator;
 
 /**
@@ -35,12 +35,14 @@ import com.m3.collections.apache.OrderedIterator;
  * removals at any index in the list.
  * <p>
  * This list implementation utilizes a tree structure internally to ensure that
- * all insertions and removals are O(log n). This provides much faster performance
- * than both an {@code ArrayList} and a {@code LinkedList} where elements
- * are inserted and removed repeatedly from anywhere in the list.
+ * indexed tree updates are O(log n), with amortized array growth for insertions.
+ * The tree structure avoids shifting a contiguous suffix when elements are
+ * inserted or removed at arbitrary indexes.
  * </p>
  * <p>
- * The following relative performance statistics are indicative of this class:
+ * The following relative performance statistics were reported for the historical
+ * node-based implementation. They are not measurements of this array-storage
+ * implementation:
  * </p>
  * <pre>
  *              get  add  insert  iterate  remove
@@ -49,15 +51,13 @@ import com.m3.collections.apache.OrderedIterator;
  * LinkedList  5800    1     350       2     325
  * </pre>
  * <p>
- * {@code ArrayList} is a good general purpose list implementation.
- * It is faster than {@code TreeList} for most operations except inserting
- * and removing in the middle of the list. {@code ArrayList} also uses less
- * memory as {@code TreeList} uses one object per entry.
+ * This implementation stores tree links and state in parent-owned primitive
+ * arrays, without retaining a node object per entry. Workload-specific latency
+ * and retained-memory comparisons require measurements of this implementation.
  * </p>
  * <p>
- * {@code LinkedList} is rarely a good choice of implementation.
- * {@code TreeList} is almost always a good replacement for it, although it
- * does use slightly more memory.
+ * The tree preserves indexed access, ranked updates and threaded iteration.
+ * Deleted slots are reused, and {@link #clear()} releases the backing arrays.
  * </p>
  *
  * @param <E> The type of the elements in the list.
@@ -70,694 +70,481 @@ public class TreeList<E> extends AbstractList<E> {
 //  LinkedList =  270;7360;3350;55860;290720;2910;55200;
 
     /**
-     * Implements an AVLNode which keeps the offset updated.
-     * <p>
-     * This node contains the real work.
-     * TreeList is just there to implement {@link List}.
-     * The nodes don't know the index of the object they are holding.  They
-     * do know however their position relative to their parent node.
-     * This allows to calculate the index of a node while traversing the tree.
-     * </p>
-     * <p>
-     * The Faedelung calculation stores a flag for both the left and right child
-     * to indicate if they are a child (false) or a link as in linked list (true).
-     * </p>
+     * Parent-owned ranked/threaded AVL slots. The original tree algorithm is retained;
+     * links, relative ranks, heights and thread/live state are primitive array lanes.
+     * A slot is stable across capacity growth. Only iterator-facing values escape.
      */
-    static class AVLNode<E> {
+    private static final class SlotStore<E> {
+        private static final int NONE = -1;
+        private static final int LEFT_PREVIOUS = 1;
+        private static final int RIGHT_NEXT = 2;
+        private static final int LIVE = 4;
+        private static final Object[] EMPTY_VALUES = new Object[0];
+        private static final int[] EMPTY_INTS = new int[0];
+        private static final byte[] EMPTY_BYTES = new byte[0];
+        private Object[] values = EMPTY_VALUES;
+        private int[] left = EMPTY_INTS;
+        private int[] right = EMPTY_INTS;
+        private int[] relativePosition = EMPTY_INTS;
+        private byte[] heights = EMPTY_BYTES;
+        private byte[] state = EMPTY_BYTES;
+        private int used;
+        private int free = NONE;
+        private int detached = NONE;
 
-        /** The left child node or the predecessor if {@link #leftIsPrevious}.*/
-        private AVLNode<E> left;
-
-        /** Flag indicating that left reference is not a subtree but the predecessor. */
-        private boolean leftIsPrevious;
-
-        /** The right child node or the successor if {@link #rightIsNext}. */
-        private AVLNode<E> right;
-
-        /** Flag indicating that right reference is not a subtree but the successor. */
-        private boolean rightIsNext;
-
-        /** How many levels of left/right are below this one. */
-        private int height;
-
-        /** The relative position, root holds absolute position. */
-        private int relativePosition;
-
-        /** The stored element. */
-        private E value;
-
-        /**
-         * Constructs a new AVL tree from a collection.
-         * <p>
-         * The collection must be nonempty.
-         *
-         * @param coll  A nonempty collection
-         */
-        private AVLNode(final Collection<? extends E> coll) {
-            this(coll.iterator(), 0, coll.size() - 1, 0, null, null);
+        /** Publishes new lanes together, after every allocation succeeds. */
+        private void grow() {
+            final long proposed = Math.max(8L, values.length + (long) (values.length >>> 1));
+            final int capacity = (int) Math.min(Integer.MAX_VALUE - 8L, proposed);
+            if (capacity <= values.length) {
+                throw new OutOfMemoryError("TreeList slot capacity exhausted");
+            }
+            final Object[] newValues = Arrays.copyOf(values, capacity);
+            final int[] newLeft = Arrays.copyOf(left, capacity);
+            final int[] newRight = Arrays.copyOf(right, capacity);
+            final int[] newPositions = Arrays.copyOf(relativePosition, capacity);
+            final byte[] newHeights = Arrays.copyOf(heights, capacity);
+            final byte[] newState = Arrays.copyOf(state, capacity);
+            values = newValues;
+            left = newLeft;
+            right = newRight;
+            relativePosition = newPositions;
+            heights = newHeights;
+            state = newState;
         }
 
-        /**
-         * Constructs a new node with a relative position.
-         *
-         * @param relativePosition  The relative position of the node
-         * @param obj  The value for the node
-         * @param rightFollower The node with the value following this one
-         * @param leftFollower The node with the value leading this one
-         */
-        private AVLNode(final int relativePosition, final E obj,
-                        final AVLNode<E> rightFollower, final AVLNode<E> leftFollower) {
-            this.relativePosition = relativePosition;
-            value = obj;
-            rightIsNext = true;
-            leftIsPrevious = true;
-            right = rightFollower;
-            left = leftFollower;
+        private int freshSlot() {
+            if (used == values.length) {
+                grow();
+            }
+            return used++;
         }
 
-        /**
-         * Constructs a new AVL tree from a collection.
-         * <p>
-         * This is a recursive helper for {@link #AVLNode(Collection)}. A call
-         * to this method will construct the subtree for elements {@code start}
-         * through {@code end} of the collection, assuming the iterator
-         * {@code e} already points at element {@code start}.
-         * </p>
-         *
-         * @param iterator  An iterator over the collection, which should already point
-         *          to the element at index {@code start} within the collection
-         * @param start  The index of the first element in the collection that
-         *          should be in this subtree
-         * @param end  The index of the last element in the collection that
-         *          should be in this subtree
-         * @param absolutePositionOfParent  absolute position of this node's
-         *          parent, or 0 if this node is the root
-         * @param prev  The {@code AVLNode} corresponding to element (start - 1)
-         *          of the collection, or null if start is 0
-         * @param next  The {@code AVLNode} corresponding to element (end + 1)
-         *          of the collection, or null if end is the last element of the collection
-         */
-        private AVLNode(final Iterator<? extends E> iterator, final int start, final int end,
-                        final int absolutePositionOfParent, final AVLNode<E> prev, final AVLNode<E> next) {
+        private int acquireSlot() {
+            if (free == NONE) {
+                return freshSlot();
+            }
+            final int slot = free;
+            free = left[slot];
+            return slot;
+        }
+
+        private int newLeaf(final int position, final E value, final int next, final int previous) {
+            final int slot = acquireSlot();
+            relativePosition[slot] = position;
+            values[slot] = value;
+            left[slot] = previous;
+            right[slot] = next;
+            heights[slot] = 0;
+            state[slot] = LEFT_PREVIOUS | RIGHT_NEXT | LIVE;
+            return slot;
+        }
+
+        /** Reuse slots while journaling this build's ownership for failure cleanup. */
+        private int build(final Collection<? extends E> source) {
+            final Iterator<? extends E> iterator = source.iterator();
+            final int end = source.size() - 1;
+            final long journalLength = Math.max(1L, end + 1L) + 1L;
+            if (journalLength > Integer.MAX_VALUE - 8L) {
+                throw new OutOfMemoryError("TreeList build capacity exhausted");
+            }
+            // Cell zero is the initialized prefix length; remaining cells are slot IDs.
+            final int[] acquired = new int[(int) journalLength];
+            try {
+                return build(iterator, 0, end, 0, NONE, NONE, acquired);
+            } catch (final RuntimeException | Error failure) {
+                // Only this uncommitted subtree is released. Reversing acquisition
+                // restores the popped free-slot order without retaining partial input.
+                for (int index = acquired[0]; index > 0; index--) {
+                    releaseSlot(acquired[index]);
+                }
+                throw failure;
+            }
+        }
+
+        private int build(final Iterator<? extends E> iterator, final int start, final int end,
+                final int parentPosition, final int previous, final int next, final int[] acquired) {
+            final int slot = acquireSlot();
+            acquired[++acquired[0]] = slot;
             final int mid = start + (end - start) / 2;
+            state[slot] = LIVE;
             if (start < mid) {
-                left = new AVLNode<>(iterator, start, mid - 1, mid, prev, this);
+                final int child = build(iterator, start, mid - 1, mid, previous, slot, acquired);
+                left[slot] = child;
             } else {
-                leftIsPrevious = true;
-                left = prev;
+                state[slot] |= LEFT_PREVIOUS;
+                left[slot] = previous;
             }
-            value = iterator.next();
-            relativePosition = mid - absolutePositionOfParent;
+            final E value = iterator.next();
+            values[slot] = value;
+            relativePosition[slot] = mid - parentPosition;
             if (mid < end) {
-                right = new AVLNode<>(iterator, mid + 1, end, mid, this, next);
+                final int child = build(iterator, mid + 1, end, mid, slot, next, acquired);
+                right[slot] = child;
             } else {
-                rightIsNext = true;
-                right = next;
+                state[slot] |= RIGHT_NEXT;
+                right[slot] = next;
             }
-            recalcHeight();
+            recalcHeight(slot);
+            return slot;
         }
 
-        /**
-         * Appends the elements of another tree list to this tree list by efficiently
-         * merging the two AVL trees. This operation is destructive to both trees and
-         * runs in O(log(m + n)) time.
-         *
-         * @param otherTree
-         *            the root of the AVL tree to merge with this one
-         * @param currentSize
-         *            the number of elements in this AVL tree
-         * @return The root of the new, merged AVL tree
-         */
-        private AVLNode<E> addAll(AVLNode<E> otherTree, final int currentSize) {
-            final AVLNode<E> maxNode = max();
-            final AVLNode<E> otherTreeMin = otherTree.min();
-
-            // We need to efficiently merge the two AVL trees while keeping them
-            // balanced (or nearly balanced). To do this, we take the shorter
-            // tree and combine it with a similar-height subtree of the taller
-            // tree. There are two symmetric cases:
-            //   * this tree is taller, or
-            //   * otherTree is taller.
-            if (otherTree.height > height) {
-                // CASE 1: The other tree is taller than this one. We will thus
-                // merge this tree into otherTree.
-
-                // STEP 1: Remove the maximum element from this tree.
-                final AVLNode<E> leftSubTree = removeMax();
-
-                // STEP 2: Navigate left from the root of otherTree until we
-                // find a subtree, s, that is no taller than me. (While we are
-                // navigating left, we store the nodes we encounter in a stack
-                // so that we can re-balance them in step 4.)
-                final Deque<AVLNode<E>> sAncestors = new ArrayDeque<>();
-                AVLNode<E> s = otherTree;
-                int sAbsolutePosition = s.relativePosition + currentSize;
-                int sParentAbsolutePosition = 0;
-                while (s != null && s.height > getHeight(leftSubTree)) {
-                    sParentAbsolutePosition = sAbsolutePosition;
-                    sAncestors.push(s);
-                    s = s.left;
-                    if (s != null) {
-                        sAbsolutePosition += s.relativePosition;
-                    }
-                }
-
-                // STEP 3: Replace s with a newly constructed subtree whose root
-                // is maxNode, whose left subtree is leftSubTree, and whose right
-                // subtree is s.
-                maxNode.setLeft(leftSubTree, null);
-                maxNode.setRight(s, otherTreeMin);
-                if (leftSubTree != null) {
-                    leftSubTree.max().setRight(null, maxNode);
-                    leftSubTree.relativePosition -= currentSize - 1;
-                }
-                if (s != null) {
-                    s.min().setLeft(null, maxNode);
-                    s.relativePosition = sAbsolutePosition - currentSize + 1;
-                }
-                maxNode.relativePosition = currentSize - 1 - sParentAbsolutePosition;
-                otherTree.relativePosition += currentSize;
-
-                // STEP 4: Re-balance the tree and recalculate the heights of s's ancestors.
-                s = maxNode;
-                while (!sAncestors.isEmpty()) {
-                    final AVLNode<E> sAncestor = sAncestors.pop();
-                    sAncestor.setLeft(s, null);
-                    s = sAncestor.balance();
-                }
-                return s;
-            }
-            otherTree = otherTree.removeMin();
-
-            final Deque<AVLNode<E>> sAncestors = new ArrayDeque<>();
-            AVLNode<E> s = this;
-            int sAbsolutePosition = s.relativePosition;
-            int sParentAbsolutePosition = 0;
-            while (s != null && s.height > getHeight(otherTree)) {
-                sParentAbsolutePosition = sAbsolutePosition;
-                sAncestors.push(s);
-                s = s.right;
-                if (s != null) {
-                    sAbsolutePosition += s.relativePosition;
-                }
-            }
-
-            otherTreeMin.setRight(otherTree, null);
-            otherTreeMin.setLeft(s, maxNode);
-            if (otherTree != null) {
-                otherTree.min().setLeft(null, otherTreeMin);
-                otherTree.relativePosition++;
-            }
-            if (s != null) {
-                s.max().setRight(null, otherTreeMin);
-                s.relativePosition = sAbsolutePosition - currentSize;
-            }
-            otherTreeMin.relativePosition = currentSize - sParentAbsolutePosition;
-
-            s = otherTreeMin;
-            while (!sAncestors.isEmpty()) {
-                final AVLNode<E> sAncestor = sAncestors.pop();
-                sAncestor.setRight(s, null);
-                s = sAncestor.balance();
-            }
-            return s;
+        private int leftSubTree(final int slot) {
+            return (state[slot] & LEFT_PREVIOUS) != 0 ? NONE : left[slot];
         }
 
-        /**
-         * Balances according to the AVL algorithm.
-         */
-        private AVLNode<E> balance() {
-            switch (heightRightMinusLeft()) {
-            case 1:
-            case 0:
+        private int rightSubTree(final int slot) {
+            return (state[slot] & RIGHT_NEXT) != 0 ? NONE : right[slot];
+        }
+
+        private int height(final int slot) {
+            return slot == NONE ? -1 : heights[slot];
+        }
+
+        private int offset(final int slot) {
+            return slot == NONE ? 0 : relativePosition[slot];
+        }
+
+        private void setOffset(final int slot, final int position) {
+            if (slot != NONE) {
+                relativePosition[slot] = position;
+            }
+        }
+
+        private void recalcHeight(final int slot) {
+            heights[slot] = (byte) (Math.max(height(leftSubTree(slot)), height(rightSubTree(slot))) + 1);
+        }
+
+        private int heightRightMinusLeft(final int slot) {
+            return height(rightSubTree(slot)) - height(leftSubTree(slot));
+        }
+
+        private void setLeft(final int slot, final int child, final int previous) {
+            state[slot] = (byte) (child == NONE ? state[slot] | LEFT_PREVIOUS : state[slot] & ~LEFT_PREVIOUS);
+            left[slot] = child == NONE ? previous : child;
+            recalcHeight(slot);
+        }
+
+        private void setRight(final int slot, final int child, final int next) {
+            state[slot] = (byte) (child == NONE ? state[slot] | RIGHT_NEXT : state[slot] & ~RIGHT_NEXT);
+            right[slot] = child == NONE ? next : child;
+            recalcHeight(slot);
+        }
+
+        @SuppressWarnings("unchecked")
+        private E value(final int slot) {
+            return (E) values[slot];
+        }
+
+        private int get(final int slot, final int index) {
+            final int relative = index - relativePosition[slot];
+            if (relative == 0) {
+                return slot;
+            }
+            final int next = relative < 0 ? leftSubTree(slot) : rightSubTree(slot);
+            return next == NONE ? NONE : get(next, relative);
+        }
+
+        private int min(final int slot) {
+            return leftSubTree(slot) == NONE ? slot : min(left[slot]);
+        }
+
+        private int max(final int slot) {
+            return rightSubTree(slot) == NONE ? slot : max(right[slot]);
+        }
+
+        private int next(final int slot) {
+            return (state[slot] & RIGHT_NEXT) != 0 || right[slot] == NONE ? right[slot] : min(right[slot]);
+        }
+
+        private int previous(final int slot) {
+            return (state[slot] & LEFT_PREVIOUS) != 0 || left[slot] == NONE ? left[slot] : max(left[slot]);
+        }
+
+        private int indexOf(final int slot, final Object object, final int index) {
+            if (leftSubTree(slot) != NONE) {
+                final int found = indexOf(left[slot], object, index + relativePosition[left[slot]]);
+                if (found != -1) {
+                    return found;
+                }
+            }
+            if (Objects.equals(values[slot], object)) {
+                return index;
+            }
+            return rightSubTree(slot) == NONE ? -1
+                    : indexOf(right[slot], object, index + relativePosition[right[slot]]);
+        }
+
+        private void toArray(final int slot, final Object[] array, final int index) {
+            array[index] = values[slot];
+            if (leftSubTree(slot) != NONE) {
+                toArray(left[slot], array, index + relativePosition[left[slot]]);
+            }
+            if (rightSubTree(slot) != NONE) {
+                toArray(right[slot], array, index + relativePosition[right[slot]]);
+            }
+        }
+
+        private int rotateLeft(final int slot) {
+            final int top = right[slot];
+            final int moved = leftSubTree(rightSubTree(slot));
+            final int topPosition = relativePosition[slot] + offset(top);
+            final int myPosition = -relativePosition[top];
+            final int movedPosition = offset(top) + offset(moved);
+            setRight(slot, moved, top);
+            setLeft(top, slot, NONE);
+            setOffset(top, topPosition);
+            setOffset(slot, myPosition);
+            setOffset(moved, movedPosition);
+            return top;
+        }
+
+        private int rotateRight(final int slot) {
+            final int top = left[slot];
+            final int moved = rightSubTree(leftSubTree(slot));
+            final int topPosition = relativePosition[slot] + offset(top);
+            final int myPosition = -relativePosition[top];
+            final int movedPosition = offset(top) + offset(moved);
+            setLeft(slot, moved, top);
+            setRight(top, slot, NONE);
+            setOffset(top, topPosition);
+            setOffset(slot, myPosition);
+            setOffset(moved, movedPosition);
+            return top;
+        }
+
+        private int balance(final int slot) {
+            switch (heightRightMinusLeft(slot)) {
             case -1:
-                return this;
+            case 0:
+            case 1:
+                return slot;
             case -2:
-                if (left.heightRightMinusLeft() > 0) {
-                    setLeft(left.rotateLeft(), null);
+                if (heightRightMinusLeft(left[slot]) > 0) {
+                    setLeft(slot, rotateLeft(left[slot]), NONE);
                 }
-                return rotateRight();
+                return rotateRight(slot);
             case 2:
-                if (right.heightRightMinusLeft() < 0) {
-                    setRight(right.rotateRight(), null);
+                if (heightRightMinusLeft(right[slot]) < 0) {
+                    setRight(slot, rotateRight(right[slot]), NONE);
                 }
-                return rotateLeft();
+                return rotateLeft(slot);
             default:
                 throw new IllegalStateException("tree inconsistent.");
             }
         }
 
-        /**
-         * Gets the element with the given index relative to the
-         * offset of the parent of this node.
-         */
-        AVLNode<E> get(final int index) {
-            final int indexRelativeToMe = index - relativePosition;
-
-            if (indexRelativeToMe == 0) {
-                return this;
-            }
-
-            final AVLNode<E> nextNode = indexRelativeToMe < 0 ? getLeftSubTree() : getRightSubTree();
-            if (nextNode == null) {
-                return null;
-            }
-            return nextNode.get(indexRelativeToMe);
-        }
-
-        /**
-         * Gets the height of the node or -1 if the node is null.
-         */
-        private int getHeight(final AVLNode<E> node) {
-            return node == null ? -1 : node.height;
-        }
-
-        /**
-         * Gets the left node, returning null if it's a faedelung.
-         */
-        private AVLNode<E> getLeftSubTree() {
-            return leftIsPrevious ? null : left;
-        }
-
-        /**
-         * Gets the relative position.
-         */
-        private int getOffset(final AVLNode<E> node) {
-            if (node == null) {
-                return 0;
-            }
-            return node.relativePosition;
-        }
-
-        /**
-         * Gets the right node, returning null if it's a faedelung.
-         */
-        private AVLNode<E> getRightSubTree() {
-            return rightIsNext ? null : right;
-        }
-
-        /**
-         * Gets the value.
-         *
-         * @return The value of this node
-         */
-        E getValue() {
-            return value;
-        }
-
-        /**
-         * Returns the height difference right - left
-         */
-        private int heightRightMinusLeft() {
-            return getHeight(getRightSubTree()) - getHeight(getLeftSubTree());
-        }
-
-        /**
-         * Finds the index that contains the specified object.
-         */
-        int indexOf(final Object object, final int index) {
-            if (getLeftSubTree() != null) {
-                final int result = left.indexOf(object, index + left.relativePosition);
-                if (result != -1) {
-                    return result;
-                }
-            }
-            if (Objects.equals(value, object)) {
-                return index;
-            }
-            if (getRightSubTree() != null) {
-                return right.indexOf(object, index + right.relativePosition);
-            }
-            return -1;
-        }
-
-        /**
-         * Inserts a node at the position index.
-         *
-         * @param index is the index of the position relative to the position of
-         * the parent node.
-         * @param obj is the object to be stored in the position.
-         */
-        AVLNode<E> insert(final int index, final E obj) {
-            final int indexRelativeToMe = index - relativePosition;
-
-            if (indexRelativeToMe <= 0) {
-                return insertOnLeft(indexRelativeToMe, obj);
-            }
-            return insertOnRight(indexRelativeToMe, obj);
-        }
-
-        private AVLNode<E> insertOnLeft(final int indexRelativeToMe, final E obj) {
-            if (getLeftSubTree() == null) {
-                setLeft(new AVLNode<>(-1, obj, this, left), null);
-            } else {
-                setLeft(left.insert(indexRelativeToMe, obj), null);
-            }
-
-            if (relativePosition >= 0) {
-                relativePosition++;
-            }
-            final AVLNode<E> ret = balance();
-            recalcHeight();
-            return ret;
-        }
-
-        private AVLNode<E> insertOnRight(final int indexRelativeToMe, final E obj) {
-            if (getRightSubTree() == null) {
-                setRight(new AVLNode<>(+1, obj, right, this), null);
-            } else {
-                setRight(right.insert(indexRelativeToMe, obj), null);
-            }
-            if (relativePosition < 0) {
-                relativePosition--;
-            }
-            final AVLNode<E> ret = balance();
-            recalcHeight();
-            return ret;
-        }
-
-        /**
-         * Gets the rightmost child of this node.
-         *
-         * @return The rightmost child (greatest index)
-         */
-        private AVLNode<E> max() {
-            return getRightSubTree() == null ? this : right.max();
-        }
-
-        /**
-         * Gets the leftmost child of this node.
-         *
-         * @return The leftmost child (smallest index)
-         */
-        private AVLNode<E> min() {
-            return getLeftSubTree() == null ? this : left.min();
-        }
-
-        /**
-         * Gets the next node in the list after this one.
-         *
-         * @return The next node
-         */
-        AVLNode<E> next() {
-            if (rightIsNext || right == null) {
-                return right;
-            }
-            return right.min();
-        }
-
-        /**
-         * Gets the node in the list before this one.
-         *
-         * @return The previous node
-         */
-        AVLNode<E> previous() {
-            if (leftIsPrevious || left == null) {
-                return left;
-            }
-            return left.max();
-        }
-
-        /**
-         * Sets the height by calculation.
-         */
-        private void recalcHeight() {
-            height = Math.max(
-                getLeftSubTree() == null ? -1 : getLeftSubTree().height,
-                getRightSubTree() == null ? -1 : getRightSubTree().height) + 1;
-        }
-
-        /**
-         * Removes the node at a given position.
-         *
-         * @param index is the index of the element to be removed relative to the position of
-         * the parent node of the current node.
-         */
-        AVLNode<E> remove(final int index) {
-            final int indexRelativeToMe = index - relativePosition;
-
-            if (indexRelativeToMe == 0) {
-                return removeSelf();
-            }
-            if (indexRelativeToMe > 0) {
-                setRight(right.remove(indexRelativeToMe), right.right);
-                if (relativePosition < 0) {
-                    relativePosition++;
+        private int insert(final int slot, final int index, final E value) {
+            final int relative = index - relativePosition[slot];
+            if (relative <= 0) {
+                setLeft(slot, leftSubTree(slot) == NONE ? newLeaf(-1, value, slot, left[slot])
+                        : insert(left[slot], relative, value), NONE);
+                if (relativePosition[slot] >= 0) {
+                    relativePosition[slot]++;
                 }
             } else {
-                setLeft(left.remove(indexRelativeToMe), left.left);
-                if (relativePosition > 0) {
-                    relativePosition--;
+                setRight(slot, rightSubTree(slot) == NONE ? newLeaf(1, value, right[slot], slot)
+                        : insert(right[slot], relative, value), NONE);
+                if (relativePosition[slot] < 0) {
+                    relativePosition[slot]--;
                 }
             }
-            recalcHeight();
-            return balance();
+            final int result = balance(slot);
+            recalcHeight(slot);
+            return result;
         }
 
-        private AVLNode<E> removeMax() {
-            if (getRightSubTree() == null) {
-                return removeSelf();
+        private int remove(final int slot, final int index) {
+            final int relative = index - relativePosition[slot];
+            if (relative == 0) {
+                return removeSelf(slot);
             }
-            setRight(right.removeMax(), right.right);
-            if (relativePosition < 0) {
-                relativePosition++;
-            }
-            recalcHeight();
-            return balance();
-        }
-
-        private AVLNode<E> removeMin() {
-            if (getLeftSubTree() == null) {
-                return removeSelf();
-            }
-            setLeft(left.removeMin(), left.left);
-            if (relativePosition > 0) {
-                relativePosition--;
-            }
-            recalcHeight();
-            return balance();
-        }
-
-        /**
-         * Removes this node from the tree.
-         *
-         * @return The node that replaces this one in the parent
-         */
-        private AVLNode<E> removeSelf() {
-            if (getRightSubTree() == null && getLeftSubTree() == null) {
-                return null;
-            }
-            if (getRightSubTree() == null) {
-                if (relativePosition > 0) {
-                    left.relativePosition += relativePosition;
-                }
-                left.max().setRight(null, right);
-                return left;
-            }
-            if (getLeftSubTree() == null) {
-                right.relativePosition += relativePosition - (relativePosition < 0 ? 0 : 1);
-                right.min().setLeft(null, left);
-                return right;
-            }
-
-            if (heightRightMinusLeft() > 0) {
-                // more on the right, so delete from the right
-                final AVLNode<E> rightMin = right.min();
-                value = rightMin.value;
-                if (leftIsPrevious) {
-                    left = rightMin.left;
-                }
-                right = right.removeMin();
-                if (relativePosition < 0) {
-                    relativePosition++;
+            if (relative > 0) {
+                setRight(slot, remove(right[slot], relative), right[right[slot]]);
+                if (relativePosition[slot] < 0) {
+                    relativePosition[slot]++;
                 }
             } else {
-                // more on the left or equal, so delete from the left
-                final AVLNode<E> leftMax = left.max();
-                value = leftMax.value;
-                if (rightIsNext) {
-                    right = leftMax.right;
-                }
-                final AVLNode<E> leftPrevious = left.left;
-                left = left.removeMax();
-                if (left == null) {
-                    // special case where left that was deleted was a double link
-                    // only occurs when height difference is equal
-                    left = leftPrevious;
-                    leftIsPrevious = true;
-                }
-                if (relativePosition > 0) {
-                    relativePosition--;
+                setLeft(slot, remove(left[slot], relative), left[left[slot]]);
+                if (relativePosition[slot] > 0) {
+                    relativePosition[slot]--;
                 }
             }
-            recalcHeight();
-            return this;
+            recalcHeight(slot);
+            return balance(slot);
         }
 
-        private AVLNode<E> rotateLeft() {
-            final AVLNode<E> newTop = right; // can't be faedelung!
-            final AVLNode<E> movedNode = getRightSubTree().getLeftSubTree();
-
-            final int newTopPosition = relativePosition + getOffset(newTop);
-            final int myNewPosition = -newTop.relativePosition;
-            final int movedPosition = getOffset(newTop) + getOffset(movedNode);
-
-            setRight(movedNode, newTop);
-            newTop.setLeft(this, null);
-
-            setOffset(newTop, newTopPosition);
-            setOffset(this, myNewPosition);
-            setOffset(movedNode, movedPosition);
-            return newTop;
-        }
-
-        private AVLNode<E> rotateRight() {
-            final AVLNode<E> newTop = left; // can't be faedelung
-            final AVLNode<E> movedNode = getLeftSubTree().getRightSubTree();
-
-            final int newTopPosition = relativePosition + getOffset(newTop);
-            final int myNewPosition = -newTop.relativePosition;
-            final int movedPosition = getOffset(newTop) + getOffset(movedNode);
-
-            setLeft(movedNode, newTop);
-            newTop.setRight(this, null);
-
-            setOffset(newTop, newTopPosition);
-            setOffset(this, myNewPosition);
-            setOffset(movedNode, movedPosition);
-            return newTop;
-        }
-
-        /**
-         * Sets the left field to the node, or the previous node if that is null
-         *
-         * @param node  The new left subtree node
-         * @param previous  The previous node in the linked list
-         */
-        private void setLeft(final AVLNode<E> node, final AVLNode<E> previous) {
-            leftIsPrevious = node == null;
-            left = leftIsPrevious ? previous : node;
-            recalcHeight();
-        }
-
-        /**
-         * Sets the relative position.
-         */
-        private int setOffset(final AVLNode<E> node, final int newOffset) {
-            if (node == null) {
-                return 0;
+        private int removeMax(final int slot) {
+            if (rightSubTree(slot) == NONE) {
+                return removeSelf(slot);
             }
-            final int oldOffset = getOffset(node);
-            node.relativePosition = newOffset;
-            return oldOffset;
-        }
-
-        /**
-         * Sets the right field to the node, or the next node if that is null
-         *
-         * @param node  The new left subtree node
-         * @param next  The next node in the linked list
-         */
-        private void setRight(final AVLNode<E> node, final AVLNode<E> next) {
-            rightIsNext = node == null;
-            right = rightIsNext ? next : node;
-            recalcHeight();
-        }
-
-        /**
-         * Sets the value.
-         *
-         * @param obj  The value to store
-         */
-        void setValue(final E obj) {
-            this.value = obj;
-        }
-
-        /**
-         * Stores the node and its children into the array specified.
-         *
-         * @param array The array to be filled
-         * @param index The index of this node
-         */
-        void toArray(final Object[] array, final int index) {
-            array[index] = value;
-            if (getLeftSubTree() != null) {
-                left.toArray(array, index + left.relativePosition);
+            setRight(slot, removeMax(right[slot]), right[right[slot]]);
+            if (relativePosition[slot] < 0) {
+                relativePosition[slot]++;
             }
-            if (getRightSubTree() != null) {
-                right.toArray(array, index + right.relativePosition);
-            }
+            recalcHeight(slot);
+            return balance(slot);
         }
 
-//      private void checkFaedelung() {
-//          AVLNode maxNode = left.max();
-//          if (!maxNode.rightIsFaedelung || maxNode.right != this) {
-//              throw new RuntimeException(maxNode + " should right-faedel to " + this);
-//          }
-//          AVLNode minNode = right.min();
-//          if (!minNode.leftIsFaedelung || minNode.left != this) {
-//              throw new RuntimeException(maxNode + " should left-faedel to " + this);
-//          }
-//      }
-//
-//        private int checkTreeDepth() {
-//            int hright = (getRightSubTree() == null ? -1 : getRightSubTree().checkTreeDepth());
-//            //          System.out.print("checkTreeDepth");
-//            //          System.out.print(this);
-//            //          System.out.print(" left: ");
-//            //          System.out.print(_left);
-//            //          System.out.print(" right: ");
-//            //          System.out.println(_right);
-//
-//            int hleft = (left == null ? -1 : left.checkTreeDepth());
-//            if (height != Math.max(hright, hleft) + 1) {
-//                throw new RuntimeException(
-//                    "height should be max" + hleft + "," + hright + " but is " + height);
-//            }
-//            return height;
-//        }
-//
-//        private int checkLeftSubNode() {
-//            if (getLeftSubTree() == null) {
-//                return 0;
-//            }
-//            int count = 1 + left.checkRightSubNode();
-//            if (left.relativePosition != -count) {
-//                throw new RuntimeException();
-//            }
-//            return count + left.checkLeftSubNode();
-//        }
-//
-//        private int checkRightSubNode() {
-//            AVLNode right = getRightSubTree();
-//            if (right == null) {
-//                return 0;
-//            }
-//            int count = 1;
-//            count += right.checkLeftSubNode();
-//            if (right.relativePosition != count) {
-//                throw new RuntimeException();
-//            }
-//            return count + right.checkRightSubNode();
-//        }
+        private int removeMin(final int slot) {
+            if (leftSubTree(slot) == NONE) {
+                return removeSelf(slot);
+            }
+            setLeft(slot, removeMin(left[slot]), left[left[slot]]);
+            if (relativePosition[slot] > 0) {
+                relativePosition[slot]--;
+            }
+            recalcHeight(slot);
+            return balance(slot);
+        }
 
-        /**
-         * Used for debugging.
-         */
-        @Override
-        public String toString() {
-            return new StringBuilder()
-                .append("AVLNode(")
-                .append(relativePosition)
-                .append(CollectionUtils.COMMA)
-                .append(left != null)
-                .append(CollectionUtils.COMMA)
-                .append(value)
-                .append(CollectionUtils.COMMA)
-                .append(getRightSubTree() != null)
-                .append(rightIsNext)
-                .append(")")
-                .toString();
+        /** Defer slot release until the donor's post-recursion thread reads complete. */
+        private int removeSelf(final int slot) {
+            if (rightSubTree(slot) == NONE && leftSubTree(slot) == NONE) {
+                detached = slot;
+                return NONE;
+            }
+            if (rightSubTree(slot) == NONE) {
+                if (relativePosition[slot] > 0) {
+                    relativePosition[left[slot]] += relativePosition[slot];
+                }
+                setRight(max(left[slot]), NONE, right[slot]);
+                detached = slot;
+                return left[slot];
+            }
+            if (leftSubTree(slot) == NONE) {
+                relativePosition[right[slot]] += relativePosition[slot] - (relativePosition[slot] < 0 ? 0 : 1);
+                setLeft(min(right[slot]), NONE, left[slot]);
+                detached = slot;
+                return right[slot];
+            }
+            if (heightRightMinusLeft(slot) > 0) {
+                final int successor = min(right[slot]);
+                values[slot] = values[successor];
+                if ((state[slot] & LEFT_PREVIOUS) != 0) {
+                    left[slot] = left[successor];
+                }
+                right[slot] = removeMin(right[slot]);
+                if (relativePosition[slot] < 0) {
+                    relativePosition[slot]++;
+                }
+            } else {
+                final int predecessor = max(left[slot]);
+                values[slot] = values[predecessor];
+                if ((state[slot] & RIGHT_NEXT) != 0) {
+                    right[slot] = right[predecessor];
+                }
+                final int previous = left[left[slot]];
+                left[slot] = removeMax(left[slot]);
+                if (left[slot] == NONE) {
+                    left[slot] = previous;
+                    state[slot] |= LEFT_PREVIOUS;
+                }
+                if (relativePosition[slot] > 0) {
+                    relativePosition[slot]--;
+                }
+            }
+            recalcHeight(slot);
+            return slot;
+        }
+
+        private void releaseSlot(final int slot) {
+            values[slot] = null;
+            state[slot] = 0;
+            heights[slot] = 0;
+            relativePosition[slot] = 0;
+            right[slot] = NONE;
+            left[slot] = free;
+            free = slot;
+        }
+
+        private void releaseDetached() {
+            releaseSlot(detached);
+            detached = NONE;
+        }
+
+        /** Height-matched AVL join from the original owner, using a primitive ancestor stack. */
+        private int addAll(final int root, int other, final int currentSize, final int[] ancestors) {
+            final int maximum = max(root);
+            final int otherMinimum = min(other);
+            int depth = 0;
+            if (height(other) > height(root)) {
+                final int leftTree = removeMax(root);
+                int subtree = other;
+                int absolute = relativePosition[subtree] + currentSize;
+                int parentAbsolute = 0;
+                while (subtree != NONE && height(subtree) > height(leftTree)) {
+                    parentAbsolute = absolute;
+                    ancestors[depth++] = subtree;
+                    subtree = left[subtree];
+                    if (subtree != NONE) {
+                        absolute += relativePosition[subtree];
+                    }
+                }
+                setLeft(maximum, leftTree, NONE);
+                setRight(maximum, subtree, otherMinimum);
+                if (leftTree != NONE) {
+                    setRight(max(leftTree), NONE, maximum);
+                    relativePosition[leftTree] -= currentSize - 1;
+                }
+                if (subtree != NONE) {
+                    setLeft(min(subtree), NONE, maximum);
+                    relativePosition[subtree] = absolute - currentSize + 1;
+                }
+                relativePosition[maximum] = currentSize - 1 - parentAbsolute;
+                relativePosition[other] += currentSize;
+                subtree = maximum;
+                while (depth != 0) {
+                    final int ancestor = ancestors[--depth];
+                    setLeft(ancestor, subtree, NONE);
+                    subtree = balance(ancestor);
+                }
+                detached = NONE;
+                return subtree;
+            }
+            other = removeMin(other);
+            int subtree = root;
+            int absolute = relativePosition[subtree];
+            int parentAbsolute = 0;
+            while (subtree != NONE && height(subtree) > height(other)) {
+                parentAbsolute = absolute;
+                ancestors[depth++] = subtree;
+                subtree = right[subtree];
+                if (subtree != NONE) {
+                    absolute += relativePosition[subtree];
+                }
+            }
+            setRight(otherMinimum, other, NONE);
+            setLeft(otherMinimum, subtree, maximum);
+            if (other != NONE) {
+                setLeft(min(other), NONE, otherMinimum);
+                relativePosition[other]++;
+            }
+            if (subtree != NONE) {
+                setRight(max(subtree), NONE, otherMinimum);
+                relativePosition[subtree] = absolute - currentSize;
+            }
+            relativePosition[otherMinimum] = currentSize - parentAbsolute;
+            subtree = otherMinimum;
+            while (depth != 0) {
+                final int ancestor = ancestors[--depth];
+                setRight(ancestor, subtree, NONE);
+                subtree = balance(ancestor);
+            }
+            detached = NONE;
+            return subtree;
+        }
+
+        private void clear() {
+            values = EMPTY_VALUES;
+            left = EMPTY_INTS;
+            right = EMPTY_INTS;
+            relativePosition = EMPTY_INTS;
+            heights = EMPTY_BYTES;
+            state = EMPTY_BYTES;
+            used = 0;
+            free = NONE;
+            detached = NONE;
         }
     }
 
@@ -772,7 +559,7 @@ public class TreeList<E> extends AbstractList<E> {
         /**
          * Cache of the next node that will be returned by {@link #next()}.
          */
-        private AVLNode<E> next;
+        private int next = -1;
 
         /**
          * The index of the next node to be returned.
@@ -783,7 +570,7 @@ public class TreeList<E> extends AbstractList<E> {
          * Cache of the last node that was returned by {@link #next()}
          * or {@link #previous()}.
          */
-        private AVLNode<E> current;
+        private int current = -1;
 
         /**
          * The index of the last node that was returned.
@@ -808,7 +595,7 @@ public class TreeList<E> extends AbstractList<E> {
             checkInterval(fromIndex, 0, parent.size(), parent.size());
             this.parent = parent;
             this.expectedModCount = parent.modCount;
-            this.next = parent.root == null ? null : parent.root.get(fromIndex);
+            this.next = parent.root == -1 ? -1 : parent.slots.get(parent.root, fromIndex);
             this.nextIndex = fromIndex;
             this.currentIndex = -1;
         }
@@ -817,7 +604,7 @@ public class TreeList<E> extends AbstractList<E> {
         public void add(final E obj) {
             checkModCount();
             parent.add(nextIndex, obj);
-            current = null;
+            current = -1;
             currentIndex = -1;
             nextIndex++;
             expectedModCount++;
@@ -852,13 +639,13 @@ public class TreeList<E> extends AbstractList<E> {
             if (!hasNext()) {
                 throw new NoSuchElementException("No element at index " + nextIndex + ".");
             }
-            if (next == null) {
-                next = parent.root.get(nextIndex);
+            if (next == -1) {
+                next = parent.slots.get(parent.root, nextIndex);
             }
-            final E value = next.getValue();
+            final E value = parent.slots.value(next);
             current = next;
             currentIndex = nextIndex++;
-            next = next.next();
+            next = parent.slots.next(next);
             return value;
         }
 
@@ -873,12 +660,12 @@ public class TreeList<E> extends AbstractList<E> {
             if (!hasPrevious()) {
                 throw new NoSuchElementException("Already at start of list.");
             }
-            if (next == null) {
-                next = parent.root.get(nextIndex - 1);
+            if (next == -1) {
+                next = parent.slots.get(parent.root, nextIndex - 1);
             } else {
-                next = next.previous();
+                next = parent.slots.previous(next);
             }
-            final E value = next.getValue();
+            final E value = parent.slots.value(next);
             current = next;
             currentIndex = --nextIndex;
             return value;
@@ -902,8 +689,8 @@ public class TreeList<E> extends AbstractList<E> {
             }
             // the AVL node referenced by next may have become stale after a remove
             // reset it now: will be retrieved by next call to next()/previous() via nextIndex
-            next = null;
-            current = null;
+            next = -1;
+            current = -1;
             currentIndex = -1;
             expectedModCount++;
         }
@@ -911,10 +698,10 @@ public class TreeList<E> extends AbstractList<E> {
         @Override
         public void set(final E obj) {
             checkModCount();
-            if (current == null) {
+            if (current == -1) {
                 throw new IllegalStateException();
             }
-            current.setValue(obj);
+            parent.slots.values[current] = obj;
         }
     }
 
@@ -934,7 +721,10 @@ public class TreeList<E> extends AbstractList<E> {
     }
 
     /** The root node in the AVL tree */
-    private AVLNode<E> root;
+    private int root = -1;
+
+    /** The one owner of all payload/index/state lanes. */
+    private final SlotStore<E> slots = new SlotStore<>();
 
     /** The current size of the list */
     private int size;
@@ -953,7 +743,7 @@ public class TreeList<E> extends AbstractList<E> {
      */
     public TreeList(final Collection<? extends E> coll) {
         if (!coll.isEmpty()) {
-            root = new AVLNode<>(coll);
+            root = slots.build(coll);
             size = coll.size();
         }
     }
@@ -968,10 +758,10 @@ public class TreeList<E> extends AbstractList<E> {
     public void add(final int index, final E obj) {
         checkInterval(index, 0, size());
         modCount++;
-        if (root == null) {
-            root = new AVLNode<>(index, obj, null, null);
+        if (root == -1) {
+            root = slots.newLeaf(index, obj, -1, -1);
         } else {
-            root = root.insert(index, obj);
+            root = slots.insert(root, index, obj);
         }
         size++;
     }
@@ -996,8 +786,10 @@ public class TreeList<E> extends AbstractList<E> {
             return false;
         }
         modCount += c.size();
-        final AVLNode<E> cTree = new AVLNode<>(c);
-        root = root == null ? cTree : root.addAll(cTree, size);
+        // Allocate the bounded join scratch before a new subtree can own payload.
+        final int[] ancestors = new int[64];
+        final int cTree = slots.build(c);
+        root = root == -1 ? cTree : slots.addAll(root, cTree, size, ancestors);
         size += c.size();
         return true;
     }
@@ -1020,7 +812,8 @@ public class TreeList<E> extends AbstractList<E> {
     @Override
     public void clear() {
         modCount++;
-        root = null;
+        root = -1;
+        slots.clear();
         size = 0;
     }
 
@@ -1044,7 +837,7 @@ public class TreeList<E> extends AbstractList<E> {
     @Override
     public E get(final int index) {
         checkInterval(index, 0, size() - 1);
-        return root.get(index).getValue();
+        return slots.value(slots.get(root, index));
     }
 
     /**
@@ -1056,10 +849,10 @@ public class TreeList<E> extends AbstractList<E> {
     @Override
     public int indexOf(final Object object) {
         // override to go 75% faster
-        if (root == null) {
+        if (root == -1) {
             return -1;
         }
-        return root.indexOf(object, root.relativePosition);
+        return slots.indexOf(root, object, slots.relativePosition[root]);
     }
 
     /**
@@ -1108,7 +901,8 @@ public class TreeList<E> extends AbstractList<E> {
         checkInterval(index, 0, size() - 1);
         modCount++;
         final E result = get(index);
-        root = root.remove(index);
+        root = slots.remove(root, index);
+        slots.releaseDetached();
         size--;
         return result;
     }
@@ -1124,9 +918,9 @@ public class TreeList<E> extends AbstractList<E> {
     @Override
     public E set(final int index, final E obj) {
         checkInterval(index, 0, size() - 1);
-        final AVLNode<E> node = root.get(index);
-        final E result = node.value;
-        node.setValue(obj);
+        final int slot = slots.get(root, index);
+        final E result = slots.value(slot);
+        slots.values[slot] = obj;
         return result;
     }
 
@@ -1149,8 +943,8 @@ public class TreeList<E> extends AbstractList<E> {
     public Object[] toArray() {
         // override to go 20% faster
         final Object[] array = new Object[size()];
-        if (root != null) {
-            root.toArray(array, root.relativePosition);
+        if (root != -1) {
+            slots.toArray(root, array, slots.relativePosition[root]);
         }
         return array;
     }
