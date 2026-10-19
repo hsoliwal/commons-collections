@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: 2026 Hitesh Soliwal and Contributors to the Synexia Project
+# SPDX-License-Identifier: Apache-2.0
+atom	pattern	boundary
+private-primitive-owner	int[] keys/left/right/next and byte[] heights	No retained Integer keys, TreeSet, TreeMap nodes or per-entry compatibility objects. IndexStore is one container per filter; Shape is the original shared semantic object.
+sorted-operations	Existing TreeList AVL height/rotation/balance pattern specialized for int keys	Insert is amortized O(log n), with occasional O(n) lane growth; contains is worst-case O(log n); successor traversal O(n); duplicate insertion does not change modification epoch.
+merge-validation	Original merge body retains upper-then-lower checks after processIndices	False extractor return is ignored; invalid partial indexes remain queryable/copyable; errors propagate before any later modification check.
+index-callback	Original stream allMatch callback/check sequence	Capture next value before callback; check epoch after callback even on false; callback exception wins.
+bitmap-callback	Original enhanced-for next/check and tail sequence	Check epoch before consuming a cached next slot. No extra check when no next slot remains or after trailing bitmap callbacks; false/exception exits retain original precedence.
+copy-and-clear	Independent complete primitive columns and same Shape	No live slot/payload facade escapes. Clear changes epoch even empty and releases all arrays; copy preserves contents while allocating independent nonempty arrays.
+capacity	Dense slots; geometric growth; every new column allocated before publication	Acquire at most one slot per distinct integer. Recursive child results are evaluated before re-reading a possibly grown child lane. Growth failure publishes no partial lane set.
+scope	Single final nonserializable SparseBloomFilter owner	No public/protected signature, BloomFilter default method, original test, receiver workflow, generic sorted delegate or concurrent owner change. Primitive capacity bounded by existing TreeList donor limit Integer.MAX_VALUE-8; no runtime footprint/throughput or concurrent guarantee.

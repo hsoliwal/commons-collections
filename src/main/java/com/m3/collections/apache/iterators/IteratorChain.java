@@ -14,11 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+// Modified 2026 by Hitesh Soliwal and Contributors to the Synexia Project:
+// array-backed pending iterator storage with preserved admission boundaries.
 package com.m3.collections.apache.iterators;
 
+import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.ConcurrentModificationException;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.Objects;
 import java.util.Queue;
 
@@ -57,7 +61,7 @@ import java.util.Queue;
 public class IteratorChain<E> implements Iterator<E> {
 
     /** The chain of iterators */
-    private final Queue<Iterator<? extends E>> iteratorQueue = new LinkedList<>();
+    private final Queue<Iterator<? extends E>> iteratorQueue = new ArrayDeque<>();
 
     /** The current iterator */
     private Iterator<? extends E> currentIterator;
@@ -175,9 +179,7 @@ public class IteratorChain<E> implements Iterator<E> {
                 // in case it is an IteratorChain, wrap every underlying iterators as unmodifiable
                 // multiple rechainings would otherwise lead to exponential growing number of function calls
                 // when the iteratorChain gets used.
-                for (final Iterator<? extends E> nestedIterator : ((IteratorChain<? extends E>) underlyingIterator).iteratorQueue) {
-                    iteratorQueue.add(UnmodifiableIterator.unmodifiableIterator(nestedIterator));
-                }
+                appendUnmodifiableIterators(((IteratorChain<? extends E>) underlyingIterator).iteratorQueue);
             } else {
                 // we don't know anything about the underlying iterator, simply add it here
                 iteratorQueue.add(iterator);
@@ -186,10 +188,36 @@ public class IteratorChain<E> implements Iterator<E> {
             // add the wrapped iterators directly instead of reusing the given instance
             // multiple rechainings would otherwise lead to exponential growing number of function calls
             // when the iteratorChain gets used.
-            iteratorQueue.addAll(((IteratorChain) iterator).iteratorQueue);
+            appendIterators(((IteratorChain<? extends E>) iterator).iteratorQueue);
         } else {
             // arbitrary other iterator
             iteratorQueue.add(iterator);
+        }
+    }
+
+    /**
+     * Appends pending child iterators, snapshotting only a self-admission.
+     * Array-backed storage must preserve the old queue's finite self-add operation.
+     *
+     * @param pending The pending child iterators.
+     */
+    private void appendIterators(final Queue<? extends Iterator<? extends E>> pending) {
+        iteratorQueue.addAll(pending == iteratorQueue ? new ArrayList<>(pending) : pending);
+    }
+
+    /**
+     * Preserves unmodifiable child admission and its existing partial-mutation
+     * boundary when the source chain is this chain itself.
+     *
+     * @param pending The pending child iterators.
+     */
+    private void appendUnmodifiableIterators(final Queue<? extends Iterator<? extends E>> pending) {
+        for (final Iterator<? extends E> nestedIterator : pending) {
+            iteratorQueue.add(UnmodifiableIterator.unmodifiableIterator(nestedIterator));
+            if (pending == iteratorQueue) {
+                // The former linked queue admitted one child, then refused its changed iterator.
+                throw new ConcurrentModificationException();
+            }
         }
     }
 

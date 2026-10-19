@@ -14,15 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+// Modified 2026 by Hitesh Soliwal and Contributors to the Synexia Project:
+// parent-owned payload array decoded by the existing permutation keys.
 package com.m3.collections.apache.iterators;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 
@@ -50,9 +50,9 @@ public class PermutationIterator<E> implements Iterator<List<E>> {
     private final int[] keys;
 
     /**
-     * Mapping between keys and objects.
+     * Payloads owned by dense, one-based permutation keys.
      */
-    private final Map<Integer, E> objectMap;
+    private final Object[] objects;
 
     /**
      * Direction table used in the algorithm:
@@ -81,13 +81,25 @@ public class PermutationIterator<E> implements Iterator<List<E>> {
         direction = new boolean[collection.size()];
         Arrays.fill(direction, false);
         int value = 1;
-        objectMap = new HashMap<>();
+        objects = new Object[keys.length];
         for (final E e : collection) {
-            objectMap.put(Integer.valueOf(value), e);
+            objects[value - 1] = e;
             keys[value - 1] = value;
             value++;
         }
         nextPermutation = new ArrayList<>(collection);
+    }
+
+    /**
+     * Decodes an ordinal without boxing or retaining an entry object. A zero key
+     * is an unfilled constructor slot and retains the previous absent-map value.
+     *
+     * @param key One-based permutation key, or zero for an unfilled slot.
+     * @return The original payload reference, or null for an unfilled slot.
+     */
+    @SuppressWarnings("unchecked")
+    private E elementAtKey(final int key) {
+        return key == 0 ? null : (E) objects[key - 1];
     }
 
     /**
@@ -145,7 +157,7 @@ public class PermutationIterator<E> implements Iterator<List<E>> {
             if (keys[i] > largestKey) {
                 direction[i] = !direction[i];
             }
-            nextP.add(objectMap.get(Integer.valueOf(keys[i])));
+            nextP.add(elementAtKey(keys[i]));
         }
         final List<E> result = nextPermutation;
         nextPermutation = nextP;
