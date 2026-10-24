@@ -69,9 +69,9 @@ public class CursorableLinkedListTest<E> extends AbstractLinkedListTest<E> {
         assertEquals("[1, 2]", list.toString());
         assertTrue(list.add((E) Integer.valueOf(3)));
         assertEquals("[1, 2, 3]", list.toString());
-        assertTrue(list.addFirst((E) Integer.valueOf(0)));
+        list.addFirst((E) Integer.valueOf(0));
         assertEquals("[0, 1, 2, 3]", list.toString());
-        assertTrue(list.addLast((E) Integer.valueOf(4)));
+        list.addLast((E) Integer.valueOf(4));
         assertEquals("[0, 1, 2, 3, 4]", list.toString());
         list.add(0, (E) Integer.valueOf(-2));
         assertEquals("[-2, 0, 1, 2, 3, 4]", list.toString());
@@ -136,7 +136,7 @@ public class CursorableLinkedListTest<E> extends AbstractLinkedListTest<E> {
         assertTrue(list.contains("A"));
         assertTrue(list.add((E) "B"));
         assertTrue(list.contains("A"));
-        assertTrue(list.addFirst((E) "a"));
+        list.addFirst((E) "a");
         assertTrue(list.contains("A"));
         assertTrue(list.remove("a"));
         assertTrue(list.contains("A"));
