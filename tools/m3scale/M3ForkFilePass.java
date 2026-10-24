@@ -4,6 +4,7 @@ import java.io.InputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.ArrayList;
@@ -41,7 +42,7 @@ public final class M3ForkFilePass {
             String hash;
             long size;
             String family;
-            if (Files.isRegularFile(p)) {
+            if (Files.isRegularFile(p, LinkOption.NOFOLLOW_LINKS)) {
                 kind = name.endsWith(".java") ? "JAVA" : "OTHER";
                 if (kind.equals("JAVA")) java++; else other++;
                 size = Files.size(p);

@@ -6,7 +6,7 @@ Do not replace upstream files or rename public packages before source, ABI,
 serialization and license gates prove the complete contract.
 
 Canonical first-party Java21 controller: [M3Scale source PR #214](https://github.com/hsoliwal/synexia-m3scale-apache2/pull/214)
-(verified Git source blob `75053bbd47f0b72e981d016f9c349223fb3cf886`).
+(verified Git source blob `5f3cb6a13cb9bfced77be4b47e103196d7d263fc`).
 
 For this fork, the code of interest includes PredicatedSortedSet; collection and map decorators; bag/multiset implementations. However, **every Git-tracked
 file**, Java or non-Java, is included in this pass. A symlink is recorded without
