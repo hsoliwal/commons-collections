@@ -601,22 +601,18 @@ public abstract class AbstractLinkedList<E> implements List<E> {
      * Adds an element at the beginning.
      *
      * @param e The element to beginning.
-     * @return true.
      */
-    public boolean addFirst(final E e) {
+    public void addFirst(final E e) {
         addNodeAfter(header, e);
-        return true;
     }
 
     /**
      * Adds an element at the end.
      *
      * @param e The element to add.
-     * @return true.
      */
-    public boolean addLast(final E e) {
+    public void addLast(final E e) {
         addNodeBefore(header, e);
-        return true;
     }
 
     /**
