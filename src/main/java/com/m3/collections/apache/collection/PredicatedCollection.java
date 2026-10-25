@@ -423,8 +423,14 @@ public class PredicatedCollection<E> extends AbstractCollectionDecorator<E> {
      */
     @Override
     public boolean addAll(final Collection<? extends E> coll) {
-        coll.forEach(this::validate);
-        return decorated().addAll(coll);
+        // Validate and retain the same occurrences before modifying the delegate.
+        // Re-reading a one-shot or mutable input could admit different elements.
+        final List<E> admitted = new ArrayList<>();
+        coll.forEach(value -> {
+            validate(value);
+            admitted.add(value);
+        });
+        return decorated().addAll(admitted);
     }
 
     /**
