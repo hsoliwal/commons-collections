@@ -1,3 +1,0 @@
-provider	upstream_file	preimage_git_blob	license	recipe_only
-hsoliwal/commons-collections	src/main/java/org/apache/commons/collections4/Bag.java	7105db142318aba3534b2de2714354463a3551b0	Apache-2.0 ASF NOTICE	YES
-hsoliwal/commons-collections	src/main/java/com/m3/collections/apache/Bag.java	5ed4f6a01a8291961cd85df0be8bf0bfdfdfc5f3	Apache-2.0 ASF NOTICE; recipe-generated package-only postimage	YES

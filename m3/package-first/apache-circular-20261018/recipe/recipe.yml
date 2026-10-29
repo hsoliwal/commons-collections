@@ -1,7 +1,0 @@
-type: specs.openrewrite.org/v1beta/recipe
-name: com.synexia.m3.donors.ApacheCircularFifoPackageFirst20261018
-displayName: Admit package-only relocated Apache bounded ring queue
-description: Source-sealed additive Java relocated fork outputs with original logic unchanged.
-recipeList:
-  - com.synexia.rewrite.M3HashPinnedJavaSnapshotRecipe:
-      crateName: m3-donors-apache-circular-package-20261018
