@@ -1,2 +1,0 @@
-path	before_sha256	after_sha256	fixedpoint	refusals
-.m3-relocation/README.md	481d748f138b3ec1331df946ee51fb4c8099e7258f3c70022bb20105d0e247fa	bce5a2d93ceebfd297349c3f670285ab1097f8f94388bd590181b5e204a8f27d	PASS	DRIFT_MISSING_DUPLICATE_PASS

@@ -1,4 +1,0 @@
-javac -Xlint:all -Werror: PASS
-java exit=1 (expected refusal)
-Exception in thread "main" java.lang.IllegalStateException: Refusing same-class differential proof; use the immutable original proof in the package-first workflow
-	at com.m3.collections.apache.queue.M3ApacheCircularFifoRelocationProof.main(M3ApacheCircularFifoRelocationProof.java:132)

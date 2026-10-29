@@ -1,8 +1,0 @@
-{
-  "schema": "M3_COMMONS_PRODUCTION_TOKEN_PRESERVATION_V1",
-  "baseline": "6404dfdfe553097bb934e044034abcec5a4dbdd0",
-  "production_sources": 367,
-  "comparison": "Java tokens excluding comments, package/import declarations; original namespace mapped to requested namespace",
-  "mismatches": [],
-  "result": "PASS"
-}
