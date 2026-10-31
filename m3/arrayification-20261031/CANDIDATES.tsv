@@ -1,0 +1,2 @@
+source_path	preimage_git_blob	technique	status
+src/main/java/com/m3/collections/apache/queue/CircularFifoQueue.java	4647485b0b0787981579f22693d2f6b65ffe42ab	Two-span_ring_lookup	HELD_NATIVE_GATES
