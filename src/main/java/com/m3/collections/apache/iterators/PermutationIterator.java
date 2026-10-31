@@ -152,7 +152,7 @@ public class PermutationIterator<E> implements Iterator<List<E>> {
         direction[indexOfLargestMobileInteger + offset] = tmpDirection;
 
         // reverse the direction of all integers larger than k and build the result
-        final List<E> nextP = new ArrayList<>();
+        final List<E> nextP = new ArrayList<>(keys.length);
         for (int i = 0; i < keys.length; i++) {
             if (keys[i] > largestKey) {
                 direction[i] = !direction[i];
