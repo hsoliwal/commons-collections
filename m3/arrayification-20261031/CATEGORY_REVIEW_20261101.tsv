@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+# Category crosswalk only. Canonical catalogue: hsoliwal/com.synexia PR 15080.
+# Challenge IDs are problem shapes, not copied algorithms. Tests and relevant licences required.
+fork	owner	category	technique_atom	leetcode	hackerrank	state
+commons-collections	CircularFifoQueue.get	ARRAY	RING_INDEX_WRAP	LC622	HR_LEFT_ROTATION	DRAFT_NATIVE_JUNIT_PENDING
+commons-collections	CircularFifoQueue.iterator.remove	ARRAY	ARRAY_TWO_POINTER_COMPACT	LC27	-	SEPARATE_ORACLE_REQUIRED
+commons-collections	TreeList	TREE	INDEXED_TREE_ROTATION	LC98	HR_SELF_BALANCING_TREE	INVENTORY_UNPROVEN
+commons-collections	NodeCachingLinkedList	LRU	INDEX_LINKED_LRU	LC146	-	INVENTORY_UNPROVEN

@@ -21,3 +21,15 @@ The historical local `.m3-relocation/rewrite.yml` is superseded; do not apply it
 ## Candidate ledger format
 
 `CANDIDATES.tsv` is comment-prefixed TSV. Readers must skip leading lines beginning with `#` as metadata comments before reading the four-column header and candidate rows. The SPDX comment declares the file license; the existing column names and candidate data remain unchanged.
+
+## Second-pass differential oracles and CI (2026-11-01)
+
+- New source-sealed test: `src/test/java/com/m3/collections/apache/queue/M3CircularFifoQueueIndexTest.java`
+
+The canonical source and expected SHA-256 postimages live in [Synexia draft PR #14952](https://github.com/hsoliwal/com.synexia/pull/14952), now expanded to eight target files (4 production, 4 additive test targets). The focused pull-request workflow is `.github/workflows/m3-arrayification-ring-20261101.yml`, and its executable scoped invocation is:
+
+```bash
+mvn -B -ntp -Dtest=M3CircularFifoQueueIndexTest test
+```
+
+Full RAT and serialization/iterator/original-oracle gates remain separate. A passing focused oracle would prove this slice only. **No full-fork/JNI/benchmark gate is waived, and no merge is authorized.**
