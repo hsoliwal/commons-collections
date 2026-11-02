@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Result-only passive receipt; generated candidate reviewed against private canonical M3HashPinnedJavaSnapshotRecipe.
+# Synexia draft #14954. No public recipe copied; no default-branch/product admission.
+repository	path	before_git_blob_sha1	after_git_blob_sha1	before_sha256	after_sha256	problem_category	recipe	status
+hsoliwal/commons-collections	src/main/java/com/m3/collections/apache/iterators/PermutationIterator.java	07001a3b95287638dd334a1287c6b4e6991dbfed	8a72b56f537a482d702e7765c375592f2ddbaefe	1fdbad2cb8f4605b39f43c08ef602921a0d1528904ef3328fb23d541e504c25d	1bbd649c9f5bc5dc714114cc8afe4993faceb6f4f5bc00127506bd13dbc43ed6	ARRAY_CAPACITY_PREALLOCATE	com.synexia.m3.ForkArrayCommons20261031	DRAFT_UNVERIFIED_FULL_FORK_JUNIT_ABI_SERIALIZATION_JMH_JNI
