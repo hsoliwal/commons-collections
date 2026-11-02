@@ -17,3 +17,7 @@ Everything outside the exact selected method atoms remains unchanged; all provid
 - **Held:** speed, allocation, packaging, rollout and merge acceptance. Measurements are not asserted.
 
 The historical local `.m3-relocation/rewrite.yml` is superseded; do not apply it to this already-relocated source. Continue serial per-owner atomization/patternization and contract-preserving recipe improvements. In JDK-received classes add the `M3` prefix only to new first-party owner types; keep received donor class simple names.
+
+## Candidate ledger format
+
+`CANDIDATES.tsv` is comment-prefixed TSV. Readers must skip leading lines beginning with `#` as metadata comments before reading the four-column header and candidate rows. The SPDX comment declares the file license; the existing column names and candidate data remain unchanged.
