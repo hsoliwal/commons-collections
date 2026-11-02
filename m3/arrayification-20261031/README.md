@@ -18,6 +18,10 @@ Everything outside the exact selected method atoms remains unchanged; all provid
 
 The historical local `.m3-relocation/rewrite.yml` is superseded; do not apply it to this already-relocated source. Continue serial per-owner atomization/patternization and contract-preserving recipe improvements. In JDK-received classes add the `M3` prefix only to new first-party owner types; keep received donor class simple names.
 
+## Candidate ledger format
+
+`CANDIDATES.tsv` is comment-prefixed TSV. Readers must skip leading lines beginning with `#` as metadata comments before reading the four-column header and candidate rows. The SPDX comment declares the file license; the existing column names and candidate data remain unchanged.
+
 ## Second-pass differential oracles and CI (2026-11-01)
 
 - New source-sealed test: `src/test/java/com/m3/collections/apache/queue/M3CircularFifoQueueIndexTest.java`
