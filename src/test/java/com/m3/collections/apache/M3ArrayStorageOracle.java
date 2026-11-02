@@ -41,6 +41,8 @@ import javax.tools.ToolProvider;
 public final class M3ArrayStorageOracle implements AutoCloseable {
     private static final String PREFIX = "com.m3.collections.apache.";
     private static final Map<String, String> SOURCE_HASHES = Map.of(
+            "bloomfilter.CellExtractor", "827c7e47975eaa90d82cca2ed86989b6dc00578605aa425150d2b1b4b7978948",
+            "iterators.CollatingIterator", "5fcade13ed5a1d75915528fc71f19ae8aaca177f548b44711b145d2baff509ea",
             "iterators.IteratorChain", "f96aa53b71ef74098658fd8ea1de9afc28394c95283d2d1c2f0924086599782d",
             "iterators.UnmodifiableIterator", "d823ac0aa7d3ab645c4b0fdba5cae4349448216a11a672cbcaff9299a31589a4",
             "queue.CircularFifoQueue", "a93526672443ce20662aa44b528e90d1b739e30ed9b33078e1ff3473f64f1e97",
