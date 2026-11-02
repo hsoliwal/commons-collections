@@ -200,7 +200,9 @@ public class CircularFifoQueue<E> extends AbstractCollection<E>
                                   Integer.valueOf(index), Integer.valueOf(sz)));
         }
 
-        final int idx = (start + index) % maxElements;
+        // Use two validated spans to avoid division and index-sum overflow.
+        final int untilWrap = maxElements - start;
+        final int idx = index < untilWrap ? start + index : index - untilWrap;
         return elements[idx];
     }
 

@@ -1,0 +1,56 @@
+# SPDX-License-Identifier: Apache-2.0
+name: M3 Commons indexed-ring differential
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/com/m3/collections/apache/queue/CircularFifoQueue.java'
+      - 'src/test/java/com/m3/collections/apache/queue/M3CircularFifoQueueIndexTest.java'
+      - '.github/workflows/m3-arrayification-ring-20261101.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  wrapped-index-oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Verify exact canonical source postimages
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'c0aa469f19aad77631e5949221b9eec70fa4da5707ec6c964553c7a46ffb21b1  %s\n' 'src/main/java/com/m3/collections/apache/queue/CircularFifoQueue.java' | sha256sum -c -
+          printf '9da28e29eb0b3ff45859192c1fb65c2257847a148b84d8710b1d32e5ef916016  %s\n' 'src/test/java/com/m3/collections/apache/queue/M3CircularFifoQueueIndexTest.java' | sha256sum -c -
+      - name: Execute actual scoped Commons JUnit test
+        shell: bash
+        run: |
+          set -euo pipefail
+          mvn -B -ntp -Dtest=M3CircularFifoQueueIndexTest test
+      - name: Require real JUnit, no failures or skips
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          files=list(Path('target/surefire-reports').glob('TEST-*M3CircularFifoQueueIndexTest*.xml'))
+          assert files,'NO_REAL_JUNIT_REPORT'
+          a=[0,0,0,0]
+          for f in files:
+              e=ET.parse(f).getroot()
+              a=[x+int(e.attrib.get(k,'0')) for x,k in zip(a,('tests','failures','errors','skipped'))]
+          assert a[0]>=1 and a[1:]==[0,0,0],a
+          print('COMMONS_RING_CONTRACT_PASS',a)
+          PY
+      - name: Upload exact JUnit reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m3-commons-array-ring
+          if-no-files-found: warn
+          path: target/surefire-reports/
