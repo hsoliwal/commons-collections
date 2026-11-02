@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+// Modified 2026-11-02 by Hitesh Soliwal and Synexia contributors: use array lookahead storage.
 package com.m3.collections.apache.iterators;
 
 import java.util.ArrayList;
@@ -49,7 +50,7 @@ public class CollatingIterator<E> implements Iterator<E> {
     private final List<Iterator<? extends E>> iterators;
 
     /** {@link Iterator#next Next} objects peeked from each iterator. */
-    private List<E> values;
+    private Object[] values;
 
     /** Whether or not each {@link #values} element has been set. */
     private BitSet valueSet;
@@ -184,12 +185,7 @@ public class CollatingIterator<E> implements Iterator<E> {
      * {@code true}.
      */
     private boolean anyValueSet(final BitSet set) {
-        for (int i = 0; i < set.size(); i++) {
-            if (set.get(i)) {
-                return true;
-            }
-        }
-        return false;
+        return !set.isEmpty();
     }
 
     /**
@@ -209,7 +205,7 @@ public class CollatingIterator<E> implements Iterator<E> {
      * <em>i</em>.
      */
     private void clear(final int i) {
-        values.set(i, null);
+        values[i] = null;
         valueSet.clear(i);
     }
 
@@ -265,16 +261,16 @@ public class CollatingIterator<E> implements Iterator<E> {
     private int least() {
         int leastIndex = -1;
         E leastObject = null;
-        for (int i = 0; i < values.size(); i++) {
+        for (int i = 0; i < values.length; i++) {
             if (!valueSet.get(i)) {
                 set(i);
             }
             if (valueSet.get(i)) {
                 if (leastIndex == -1) {
                     leastIndex = i;
-                    leastObject = values.get(i);
+                    leastObject = valueAt(i);
                 } else {
-                    final E curObject = values.get(i);
+                    final E curObject = valueAt(i);
                     Objects.requireNonNull(comparator, "You must invoke setComparator() to set a comparator first.");
                     if (comparator.compare(curObject, leastObject) < 0) {
                         leastObject = curObject;
@@ -301,7 +297,7 @@ public class CollatingIterator<E> implements Iterator<E> {
         if (leastIndex == -1) {
             throw new NoSuchElementException();
         }
-        final E val = values.get(leastIndex);
+        final E val = valueAt(leastIndex);
         clear(leastIndex);
         lastReturned = leastIndex;
         return val;
@@ -332,11 +328,11 @@ public class CollatingIterator<E> implements Iterator<E> {
     private boolean set(final int index) {
         final Iterator<? extends E> it = iterators.get(index);
         if (it.hasNext()) {
-            values.set(index, it.next());
+            values[index] = it.next();
             valueSet.set(index);
             return true;
         }
-        values.set(index, null);
+        values[index] = null;
         valueSet.clear(index);
         return false;
     }
@@ -376,13 +372,15 @@ public class CollatingIterator<E> implements Iterator<E> {
      */
     private void start() {
         if (values == null) {
-            values = new ArrayList<>(iterators.size());
+            values = new Object[iterators.size()];
             valueSet = new BitSet(iterators.size());
-            for (int i = 0; i < iterators.size(); i++) {
-                values.add(null);
-                valueSet.clear(i);
-            }
         }
+    }
+
+    /** Returns one cached payload without exposing the owned array. */
+    @SuppressWarnings("unchecked")
+    private E valueAt(final int index) {
+        return (E) values[index];
     }
 
 }

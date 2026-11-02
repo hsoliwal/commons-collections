@@ -1,0 +1,226 @@
+{
+  "schema": "M3_COLLECTION_ARRAY_LANES_PUBLIC_RECEIPT_V1",
+  "copyright": "Copyright 2026 Hitesh Soliwal and Contributors to the Synexia Project",
+  "metadata_license": "Apache-2.0",
+  "source_rights": "This licence applies only to this factual receipt. Original source copyright, licence and NOTICE files remain authoritative; no source is relicensed.",
+  "repository": "hsoliwal/commons-collections",
+  "baseline_commits": [
+    "14cbd37dca1b2717e503dfcdf60cfa62ec4c8cc4"
+  ],
+  "receipt_baseline_commit": "14cbd37dca1b2717e503dfcdf60cfa62ec4c8cc4",
+  "canonical": {
+    "repository": "hsoliwal/com.synexia",
+    "source_commit": "7af83c5ee4ad166d8cd45c6c33822debabd705ca",
+    "review_url": "https://github.com/hsoliwal/com.synexia/pull/15427",
+    "recipe": "com.synexia.m3jdk.CollectionsContractRefinement20261017",
+    "final_source_proof": {
+      "path": "synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/evidence/array-lanes-20261102/NOTICE_R2_FINAL.json",
+      "sha256": "08487d45fea22e646e645a64123e88c641d53a17dea04bb21de0321aa55e2a73",
+      "url": "https://github.com/hsoliwal/com.synexia/blob/7af83c5ee4ad166d8cd45c6c33822debabd705ca/synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/evidence/array-lanes-20261102/NOTICE_R2_FINAL.json"
+    }
+  },
+  "review": {
+    "base": "master",
+    "branch": "m3/cell-extractor-primitive-counts-20261102",
+    "title": "Array-back CellExtractor counts and CollatingIterator lookahead"
+  },
+  "review_statement": "## Problem and change\n\n`CellExtractor.from` retained TreeMap counter entries and allocated counter objects while collecting indexes. Replace that storage with primitive index/count/AVL/successor lanes, reusing the existing sparse Bloom algorithm. `CollatingIterator` now keeps fixed lookahead values in an Object array and uses the existing BitSet emptiness summary.\n\nPreserve signed index order, overflow, lazy/failed population, early return, comparator/child callback order, iterator state, and public APIs. Add exact-source differential tests and passive contract notes.\n\n## Verification\n\n- Focused Commons Maven suite on the final notice-complete sources: **376 tests; zero failures, errors, or skips**.\n- New coverage includes 400 seeded frequency scenarios, 32,768 monotonic indexes, and 180 collating callback traces.\n- Both production public descriptors are identical.\n- The same focused suite in the composed M3JDK Commons module also passed 376 tests on the final notice-complete sources.\n\n## Open merge gates\n\nExisting Checkstyle: 230 baseline findings, 232 candidate findings; only two new first-party test headers conflict with the inherited ASF fixed-header rule. RAT reports the same existing `CANDIDATES.tsv` failure in both trees and accepts all nine proposed files. R2 adds dated modification notices while preserving the original ASF headers. Focused Checkstyle was repeated with no new R2 findings; the full-tree style/RAT comparison above is the preserved R1 result. This PR does not assert that all remaining collection nodes have been converted.\n\n## Canonical execution\n\nCanonical recipe: `com.synexia.m3jdk.CollectionsContractRefinement20261017`, source revision **7af83c5ee4ad166d8cd45c6c33822debabd705ca**, review https://github.com/hsoliwal/com.synexia/pull/15427. Product bytes were emitted by actual qualified SDK Results and the second receive changed zero files. The canonical recipe and executable receiver remain in Synexia.\n",
+  "qualified_source_packets": [
+    {
+      "dataset": "commons-lanes-20261102",
+      "baseline_commit": "14cbd37dca1b2717e503dfcdf60cfa62ec4c8cc4",
+      "target_count": 9,
+      "changes": [
+        {
+          "path": "m3/arrayification-20261031/CELL_EXTRACTOR_CONTRACT.md",
+          "role": "passive_contract_or_release_note",
+          "before_sha256": "ABSENT",
+          "after_sha256": "d76e1cce7f9bab716c895a8e3bb31c5c5afbd438706dea3215265c152a71bd0a",
+          "canonical_template": {
+            "path": "synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/datasets/commons-lanes-20261102/resources/com/synexia/rewrite/hash-pinned-text/m3-collections-contract-refinement-20261017-commons-lanes-20261102/0001-CELL_EXTRACTOR_CONTRACT.md.txt",
+            "sha256": "d76e1cce7f9bab716c895a8e3bb31c5c5afbd438706dea3215265c152a71bd0a",
+            "url": "https://github.com/hsoliwal/com.synexia/blob/7af83c5ee4ad166d8cd45c6c33822debabd705ca/synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/datasets/commons-lanes-20261102/resources/com/synexia/rewrite/hash-pinned-text/m3-collections-contract-refinement-20261017-commons-lanes-20261102/0001-CELL_EXTRACTOR_CONTRACT.md.txt"
+          }
+        },
+        {
+          "path": "m3/arrayification-20261031/COLLATING_ITERATOR_CONTRACT.md",
+          "role": "passive_contract_or_release_note",
+          "before_sha256": "ABSENT",
+          "after_sha256": "059e451a25124f72bd9f69cb481e2d797a9f8a920081dfc5ef2393d25e85eb4a",
+          "canonical_template": {
+            "path": "synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/datasets/commons-lanes-20261102/resources/com/synexia/rewrite/hash-pinned-text/m3-collections-contract-refinement-20261017-commons-lanes-20261102/0002-COLLATING_ITERATOR_CONTRACT.md.txt",
+            "sha256": "059e451a25124f72bd9f69cb481e2d797a9f8a920081dfc5ef2393d25e85eb4a",
+            "url": "https://github.com/hsoliwal/com.synexia/blob/7af83c5ee4ad166d8cd45c6c33822debabd705ca/synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/datasets/commons-lanes-20261102/resources/com/synexia/rewrite/hash-pinned-text/m3-collections-contract-refinement-20261017-commons-lanes-20261102/0002-COLLATING_ITERATOR_CONTRACT.md.txt"
+          }
+        },
+        {
+          "path": "src/main/java/com/m3/collections/apache/bloomfilter/CellExtractor.java",
+          "role": "production_source",
+          "before_sha256": "827c7e47975eaa90d82cca2ed86989b6dc00578605aa425150d2b1b4b7978948",
+          "after_sha256": "21cb1616174623a33994ba6062bfbc0fddd10e8d597d957e4b061b8a0f0fb161",
+          "canonical_template": {
+            "path": "synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/datasets/commons-lanes-20261102/resources/com/synexia/rewrite/hash-pinned-java/m3-collections-contract-refinement-20261017-commons-lanes-20261102/0003-CellExtractor.java.txt",
+            "sha256": "21cb1616174623a33994ba6062bfbc0fddd10e8d597d957e4b061b8a0f0fb161",
+            "url": "https://github.com/hsoliwal/com.synexia/blob/7af83c5ee4ad166d8cd45c6c33822debabd705ca/synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/datasets/commons-lanes-20261102/resources/com/synexia/rewrite/hash-pinned-java/m3-collections-contract-refinement-20261017-commons-lanes-20261102/0003-CellExtractor.java.txt"
+          }
+        },
+        {
+          "path": "src/main/java/com/m3/collections/apache/iterators/CollatingIterator.java",
+          "role": "production_source",
+          "before_sha256": "5fcade13ed5a1d75915528fc71f19ae8aaca177f548b44711b145d2baff509ea",
+          "after_sha256": "5adf455d9faf65428d509f7e667b54254b1d26f50f4af19925866c0bc4d1dc9e",
+          "canonical_template": {
+            "path": "synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/datasets/commons-lanes-20261102/resources/com/synexia/rewrite/hash-pinned-java/m3-collections-contract-refinement-20261017-commons-lanes-20261102/0004-CollatingIterator.java.txt",
+            "sha256": "5adf455d9faf65428d509f7e667b54254b1d26f50f4af19925866c0bc4d1dc9e",
+            "url": "https://github.com/hsoliwal/com.synexia/blob/7af83c5ee4ad166d8cd45c6c33822debabd705ca/synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/datasets/commons-lanes-20261102/resources/com/synexia/rewrite/hash-pinned-java/m3-collections-contract-refinement-20261017-commons-lanes-20261102/0004-CollatingIterator.java.txt"
+          }
+        },
+        {
+          "path": "src/test/java/com/m3/collections/apache/M3ArrayStorageOracle.java",
+          "role": "test_source",
+          "before_sha256": "94d1f1a101d39ebe80287bf1785f1110698e7eaf68f624c654c9acbd1f2934d5",
+          "after_sha256": "bddc424de5d11b60698be86f4fa09e95edfdbd656c987580a74f0e0ca0d452b9",
+          "canonical_template": {
+            "path": "synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/datasets/commons-lanes-20261102/resources/com/synexia/rewrite/hash-pinned-java/m3-collections-contract-refinement-20261017-commons-lanes-20261102/0005-M3ArrayStorageOracle.java.txt",
+            "sha256": "bddc424de5d11b60698be86f4fa09e95edfdbd656c987580a74f0e0ca0d452b9",
+            "url": "https://github.com/hsoliwal/com.synexia/blob/7af83c5ee4ad166d8cd45c6c33822debabd705ca/synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/datasets/commons-lanes-20261102/resources/com/synexia/rewrite/hash-pinned-java/m3-collections-contract-refinement-20261017-commons-lanes-20261102/0005-M3ArrayStorageOracle.java.txt"
+          }
+        },
+        {
+          "path": "src/test/java/com/m3/collections/apache/bloomfilter/M3CellExtractorArrayStorageTest.java",
+          "role": "test_source",
+          "before_sha256": "ABSENT",
+          "after_sha256": "b7635008984c89addf05e8d2aac8d7f19a0427f5b70f84d1ec5c9a30c6538c2a",
+          "canonical_template": {
+            "path": "synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/datasets/commons-lanes-20261102/resources/com/synexia/rewrite/hash-pinned-java/m3-collections-contract-refinement-20261017-commons-lanes-20261102/0006-M3CellExtractorArrayStorageTest.java.txt",
+            "sha256": "b7635008984c89addf05e8d2aac8d7f19a0427f5b70f84d1ec5c9a30c6538c2a",
+            "url": "https://github.com/hsoliwal/com.synexia/blob/7af83c5ee4ad166d8cd45c6c33822debabd705ca/synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/datasets/commons-lanes-20261102/resources/com/synexia/rewrite/hash-pinned-java/m3-collections-contract-refinement-20261017-commons-lanes-20261102/0006-M3CellExtractorArrayStorageTest.java.txt"
+          }
+        },
+        {
+          "path": "src/test/java/com/m3/collections/apache/iterators/M3CollatingIteratorArrayStorageTest.java",
+          "role": "test_source",
+          "before_sha256": "ABSENT",
+          "after_sha256": "6181f55e69aa0bdc41c76d6fecea9a7f2b8f3ed79a3278948692843730aa83f2",
+          "canonical_template": {
+            "path": "synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/datasets/commons-lanes-20261102/resources/com/synexia/rewrite/hash-pinned-java/m3-collections-contract-refinement-20261017-commons-lanes-20261102/0007-M3CollatingIteratorArrayStorageTest.java.txt",
+            "sha256": "6181f55e69aa0bdc41c76d6fecea9a7f2b8f3ed79a3278948692843730aa83f2",
+            "url": "https://github.com/hsoliwal/com.synexia/blob/7af83c5ee4ad166d8cd45c6c33822debabd705ca/synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/datasets/commons-lanes-20261102/resources/com/synexia/rewrite/hash-pinned-java/m3-collections-contract-refinement-20261017-commons-lanes-20261102/0007-M3CollatingIteratorArrayStorageTest.java.txt"
+          }
+        },
+        {
+          "path": "src/test/resources/m3/array-storage-20261019/original/CellExtractor.java.txt",
+          "role": "test_resource_or_preserved_preimage",
+          "before_sha256": "ABSENT",
+          "after_sha256": "827c7e47975eaa90d82cca2ed86989b6dc00578605aa425150d2b1b4b7978948",
+          "canonical_template": {
+            "path": "synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/datasets/commons-lanes-20261102/resources/com/synexia/rewrite/hash-pinned-text/m3-collections-contract-refinement-20261017-commons-lanes-20261102/0008-CellExtractor.java.txt.txt",
+            "sha256": "827c7e47975eaa90d82cca2ed86989b6dc00578605aa425150d2b1b4b7978948",
+            "url": "https://github.com/hsoliwal/com.synexia/blob/7af83c5ee4ad166d8cd45c6c33822debabd705ca/synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/datasets/commons-lanes-20261102/resources/com/synexia/rewrite/hash-pinned-text/m3-collections-contract-refinement-20261017-commons-lanes-20261102/0008-CellExtractor.java.txt.txt"
+          }
+        },
+        {
+          "path": "src/test/resources/m3/array-storage-20261019/original/CollatingIterator.java.txt",
+          "role": "test_resource_or_preserved_preimage",
+          "before_sha256": "ABSENT",
+          "after_sha256": "5fcade13ed5a1d75915528fc71f19ae8aaca177f548b44711b145d2baff509ea",
+          "canonical_template": {
+            "path": "synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/datasets/commons-lanes-20261102/resources/com/synexia/rewrite/hash-pinned-text/m3-collections-contract-refinement-20261017-commons-lanes-20261102/0009-CollatingIterator.java.txt.txt",
+            "sha256": "5fcade13ed5a1d75915528fc71f19ae8aaca177f548b44711b145d2baff509ea",
+            "url": "https://github.com/hsoliwal/com.synexia/blob/7af83c5ee4ad166d8cd45c6c33822debabd705ca/synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/datasets/commons-lanes-20261102/resources/com/synexia/rewrite/hash-pinned-text/m3-collections-contract-refinement-20261017-commons-lanes-20261102/0009-CollatingIterator.java.txt.txt"
+          }
+        }
+      ],
+      "dataset_metadata": {
+        "path": "synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/datasets/commons-lanes-20261102/DATASET.json",
+        "sha256": "fedd30c99e4b9e1628be0740c4a8f1f1f65be83ef407857274d61efe2b08655b",
+        "url": "https://github.com/hsoliwal/com.synexia/blob/7af83c5ee4ad166d8cd45c6c33822debabd705ca/synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/datasets/commons-lanes-20261102/DATASET.json"
+      },
+      "qualification": {
+        "path": "synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/evidence/array-lanes-20261102/execution/commons-lanes-20261102/QUALIFICATION.json",
+        "sha256": "3d3ce3edda4b8e6569d2e655b91bbfb2f921f74af4376db5bf3288e12b9cef43",
+        "url": "https://github.com/hsoliwal/com.synexia/blob/7af83c5ee4ad166d8cd45c6c33822debabd705ca/synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/evidence/array-lanes-20261102/execution/commons-lanes-20261102/QUALIFICATION.json"
+      },
+      "materialization": {
+        "path": "synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/evidence/array-lanes-20261102/execution/commons-lanes-20261102/MATERIALIZATION.json",
+        "sha256": "f6cfa58a1f2c845d935457f48e75cedcb4ba92f4acd058b4fdfb435702d82af3",
+        "url": "https://github.com/hsoliwal/com.synexia/blob/7af83c5ee4ad166d8cd45c6c33822debabd705ca/synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/evidence/array-lanes-20261102/execution/commons-lanes-20261102/MATERIALIZATION.json"
+      },
+      "actual_sdk_apply": {
+        "dataset": "commons-lanes-20261102",
+        "targets": 9,
+        "changes": 9,
+        "mode": "apply",
+        "actual_sdk_results": true
+      },
+      "fixed_point": {
+        "dataset": "commons-lanes-20261102",
+        "targets": 9,
+        "changes": 0,
+        "mode": "apply",
+        "actual_sdk_results": true
+      },
+      "sdk_suites": [
+        {
+          "name": "com.synexia.rewrite.M3JacksonTemplateAdmissionTest",
+          "tests": "6",
+          "failures": "0",
+          "errors": "0",
+          "skipped": "0"
+        },
+        {
+          "name": "com.synexia.rewrite.M3TaskRecipeTest",
+          "tests": "5",
+          "failures": "0",
+          "errors": "0",
+          "skipped": "0"
+        }
+      ],
+      "input_sealing_cases": 18,
+      "receiver_contract_cases": 9
+    }
+  ],
+  "runtime_checks": [
+    {
+      "scope": "fork focused Maven suite, exact final R2 sources",
+      "tests": 376,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "scope": "target-isolated focused Maven suite, exact final R2 sources",
+      "tests": 376,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ],
+  "runtime_evidence": [
+    {
+      "path": "synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/evidence/notice-correction/commons-r2/R2_VERIFICATION.json",
+      "sha256": "c577d9817fb08d53180cd3a9bfb42bedd8f1889ddbc7f5e87077a28c06be27f4",
+      "url": "https://github.com/hsoliwal/com.synexia/blob/7af83c5ee4ad166d8cd45c6c33822debabd705ca/synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/evidence/notice-correction/commons-r2/R2_VERIFICATION.json"
+    }
+  ],
+  "open_gates_and_limits": [
+    "The focused 376-test suite is not whole-project test coverage.",
+    "Repository Checkstyle: 230 baseline versus 232 candidate findings; two new regression tests retain their actual rights headers and fail the configured header rule.",
+    "R2 independently ran changed-file Checkstyle without a skip: one inherited oracle Header finding plus two new-test Header findings; no production findings or additional R2 violations.",
+    "RAT retains the same existing CANDIDATES.tsv failure in baseline and candidate; all nine proposed paths are admitted by that comparison. RAT was not rerun for the R2 comment-only correction.",
+    "No native-allocation or measured-speedup claim; remaining collection families require separate work."
+  ],
+  "delivery": {
+    "receipt_dataset": "commons-receipt-20261102",
+    "path": "m3/array-lanes-20261102/RECEIPT.json",
+    "execution_evidence_path": "synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/evidence/array-lanes-20261102/execution/commons-receipt-20261102",
+    "revision_scope": "Receipt delivery evidence is generated after source commit A and published in the canonical review; it is not claimed to exist at the source commit.",
+    "method": "Existing canonical prepare, actual OpenRewrite SDK qualification, admitted Result receipt, then zero-change fixed-point receive."
+  },
+  "claims": {
+    "all_collection_families_converted": false,
+    "measured_speedup": false,
+    "installed_jdk_qualification": false,
+    "merge_approved": false
+  }
+}

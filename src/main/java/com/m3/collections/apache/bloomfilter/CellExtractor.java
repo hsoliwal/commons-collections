@@ -14,9 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+// Modified 2026-11-02 by Hitesh Soliwal and Synexia contributors: use primitive count lanes.
 package com.m3.collections.apache.bloomfilter;
 
-import java.util.TreeMap;
+import java.util.Arrays;
+import java.util.ConcurrentModificationException;
 import java.util.function.BiPredicate;
 import java.util.function.IntPredicate;
 
@@ -87,42 +89,127 @@ public interface CellExtractor extends IndexExtractor {
     static CellExtractor from(final IndexExtractor indexExtractor) {
         return new CellExtractor() {
 
-            /**
-             * Class to track cell values in the TreeMap.
-             */
-            final class CounterCell implements Comparable<CounterCell> {
-                final int idx;
-                int count;
-
-                CounterCell(final int idx, final int count) {
-                    this.idx = idx;
-                    this.count = count;
-                }
-
-                @Override
-                public int compareTo(final CounterCell other) {
-                    return Integer.compare(idx, other.idx);
-                }
-            }
-
-            TreeMap<CounterCell, CounterCell> counterCells = new TreeMap<>();
+            // The existing SparseBloomFilter AVL/successor pattern, with one
+            // primitive count lane. No tree node or counter object is retained.
+            private static final int NONE = -1;
+            private int[] indices = new int[0];
+            private int[] counts = indices;
+            private int[] left = indices;
+            private int[] right = indices;
+            private int[] next = indices;
+            private byte[] heights = new byte[0];
+            private int root = NONE;
+            private int first = NONE;
+            private int size;
+            private int modCount;
 
             @Override
             public int[] asIndexArray() {
                 populate();
-                return counterCells.keySet().stream().mapToInt(c -> c.idx).toArray();
+                final int[] result = new int[size];
+                int offset = 0;
+                for (int slot = first; slot != NONE; slot = next[slot]) {
+                    result[offset++] = indices[slot];
+                }
+                return result;
+            }
+
+            /** Publish all lanes only after every allocation succeeds. */
+            private void grow() {
+                final long proposed = Math.max(8L, indices.length + (long) (indices.length >>> 1));
+                final int capacity = (int) Math.min(Integer.MAX_VALUE - 8L, proposed);
+                if (capacity <= indices.length) {
+                    throw new OutOfMemoryError("CellExtractor slot capacity exhausted");
+                }
+                final int[] newIndices = Arrays.copyOf(indices, capacity);
+                final int[] newCounts = Arrays.copyOf(counts, capacity);
+                final int[] newLeft = Arrays.copyOf(left, capacity);
+                final int[] newRight = Arrays.copyOf(right, capacity);
+                final int[] newNext = Arrays.copyOf(next, capacity);
+                final byte[] newHeights = Arrays.copyOf(heights, capacity);
+                indices = newIndices;
+                counts = newCounts;
+                left = newLeft;
+                right = newRight;
+                next = newNext;
+                heights = newHeights;
+            }
+
+            private int height(final int slot) {
+                return slot == NONE ? -1 : heights[slot];
+            }
+
+            private void recalcHeight(final int slot) {
+                heights[slot] = (byte) (Math.max(height(left[slot]), height(right[slot])) + 1);
+            }
+
+            private int rotateLeft(final int slot) {
+                final int top = right[slot];
+                right[slot] = left[top];
+                left[top] = slot;
+                recalcHeight(slot);
+                recalcHeight(top);
+                return top;
+            }
+
+            private int rotateRight(final int slot) {
+                final int top = left[slot];
+                left[slot] = right[top];
+                right[top] = slot;
+                recalcHeight(slot);
+                recalcHeight(top);
+                return top;
+            }
+
+            private int insert(final int slot, final int index, final int previous, final int successor) {
+                if (slot == NONE) {
+                    if (size == indices.length) {
+                        grow();
+                    }
+                    final int added = size++;
+                    indices[added] = index;
+                    counts[added] = 1;
+                    left[added] = right[added] = NONE;
+                    next[added] = successor;
+                    if (previous == NONE) {
+                        first = added;
+                    } else {
+                        next[previous] = added;
+                    }
+                    modCount++;
+                    return added;
+                }
+                if (index < indices[slot]) {
+                    final int child = insert(left[slot], index, previous, slot);
+                    left[slot] = child;
+                } else if (index > indices[slot]) {
+                    final int child = insert(right[slot], index, slot, successor);
+                    right[slot] = child;
+                } else {
+                    counts[slot]++;
+                    return slot;
+                }
+                recalcHeight(slot);
+                final int balance = height(right[slot]) - height(left[slot]);
+                if (balance == -2) {
+                    if (height(right[left[slot]]) > height(left[left[slot]])) {
+                        left[slot] = rotateLeft(left[slot]);
+                    }
+                    return rotateRight(slot);
+                }
+                if (balance == 2) {
+                    if (height(left[right[slot]]) > height(right[right[slot]])) {
+                        right[slot] = rotateRight(right[slot]);
+                    }
+                    return rotateLeft(slot);
+                }
+                return slot;
             }
 
             private void populate() {
-                if (counterCells.isEmpty()) {
-                    indexExtractor.processIndices(idx -> {
-                        final CounterCell cell = new CounterCell(idx, 1);
-                        final CounterCell counter = counterCells.get(cell);
-                        if (counter == null) {
-                            counterCells.put(cell, cell);
-                        } else {
-                            counter.count++;
-                        }
+                if (size == 0) {
+                    indexExtractor.processIndices(index -> {
+                        root = insert(root, index, NONE, NONE);
                         return true;
                     });
                 }
@@ -131,8 +218,18 @@ public interface CellExtractor extends IndexExtractor {
             @Override
             public boolean processCells(final CellPredicate consumer) {
                 populate();
-                for (final CounterCell cell : counterCells.values()) {
-                    if (!consumer.test(cell.idx, cell.count)) {
+                final int expectedModCount = modCount;
+                int slot = first;
+                while (slot != NONE) {
+                    if (modCount != expectedModCount) {
+                        throw new ConcurrentModificationException();
+                    }
+                    final int index = indices[slot];
+                    final int count = counts[slot];
+                    // Like TreeMap's iterator, select the successor before the
+                    // callback; check structural changes only before next().
+                    slot = next[slot];
+                    if (!consumer.test(index, count)) {
                         return false;
                     }
                 }
