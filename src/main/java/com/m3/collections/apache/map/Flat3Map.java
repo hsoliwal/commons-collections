@@ -85,6 +85,7 @@ public class Flat3Map<K, V> implements IterableMap<K, V>, Serializable, Cloneabl
     abstract static class EntryIterator<K, V> {
         private final Flat3Map<K, V> parent;
         private int nextIndex;
+        private boolean canRemove;
         private FlatMapEntry<K, V> currentEntry;
 
         /**
@@ -98,21 +99,62 @@ public class Flat3Map<K, V> implements IterableMap<K, V>, Serializable, Cloneabl
             return nextIndex < parent.size;
         }
 
-        public Map.Entry<K, V> nextEntry() {
+        private void advance() {
             if (!hasNext()) {
                 throw new NoSuchElementException(AbstractHashedMap.NO_NEXT_ENTRY);
             }
-            currentEntry = new FlatMapEntry<>(parent, ++nextIndex);
+            nextIndex++;
+            canRemove = true;
+        }
+
+        private K currentKey() {
+            switch (nextIndex) {
+            case 3:
+                return parent.key3;
+            case 2:
+                return parent.key2;
+            case 1:
+                return parent.key1;
+            default:
+                throw new IllegalStateException("Invalid map index: " + nextIndex);
+            }
+        }
+
+        public Map.Entry<K, V> nextEntry() {
+            advance();
+            currentEntry = new FlatMapEntry<>(parent, nextIndex);
             return currentEntry;
         }
 
+        K nextKey() {
+            advance();
+            return currentKey();
+        }
+
+        V nextValue() {
+            advance();
+            switch (nextIndex) {
+            case 3:
+                return parent.value3;
+            case 2:
+                return parent.value2;
+            case 1:
+                return parent.value1;
+            default:
+                throw new IllegalStateException("Invalid map index: " + nextIndex);
+            }
+        }
+
         public void remove() {
-            if (currentEntry == null) {
+            if (!canRemove) {
                 throw new IllegalStateException(AbstractHashedMap.REMOVE_INVALID);
             }
-            parent.remove(currentEntry.getKey());
-            currentEntry.setRemoved(true);
+            parent.remove(currentKey());
+            if (currentEntry != null) {
+                currentEntry.setRemoved(true);
+            }
             nextIndex--;
+            canRemove = false;
             currentEntry = null;
         }
 
@@ -451,7 +493,7 @@ public class Flat3Map<K, V> implements IterableMap<K, V>, Serializable, Cloneabl
 
         @Override
         public K next() {
-            return nextEntry().getKey();
+            return nextKey();
         }
     }
 
@@ -505,7 +547,7 @@ public class Flat3Map<K, V> implements IterableMap<K, V>, Serializable, Cloneabl
 
         @Override
         public V next() {
-            return nextEntry().getValue();
+            return nextValue();
         }
     }
 
