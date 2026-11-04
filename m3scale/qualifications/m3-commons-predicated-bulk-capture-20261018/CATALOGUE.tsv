@@ -1,0 +1,6 @@
+category	owner	candidate	decision	compatibility	license
+FILTER_VIEW_INPUT_CAPTURE	PredicatedCollection.addAll	Validate first pass; reopen input during write	REJECT	Lazy second traversal may change admitted values	Apache-2.0 upstream
+ARRAY_OFFSET_DYNAMIC	PredicatedCollection.addAll	Transient ArrayList<E> of validated same occurrences	SELECT	One source traversal, preserve predicate validation before all writes and owner.addAll bulk semantics	First-party delta Apache-2.0
+DONOR_GUAVA	Guava Collections2.FilteredCollection.addAll	Same two-traversal family	COMPARE_ONLY	Separate vendor source requires independent recipe and contract evidence	Google Guava Apache-2.0
+DONOR_ECLIPSE	Eclipse Collections FastList	Primitive/object array compaction	COMPARE_ONLY	EPL/EDL cannot be silently repackaged into Apache-only source	EPL/EDL
+LEETCODE_HACKERRANK_GFG	Array/bitmask/two-pointer problem categories	Algorithm taxonomy	REFERENCE_ONLY	No challenge code copied	External reference
