@@ -1,0 +1,208 @@
+{
+  "schema": "SYNEXIA_COLLECTION_FORK_QUALIFICATION_V1",
+  "SPDX-License-Identifier": "Apache-2.0",
+  "SPDX-FileCopyrightText": "2026 Hitesh Soliwal and Contributors to the Synexia Project",
+  "kind": "passive executed-output receipt; no recipe implementation",
+  "target_repository": "hsoliwal/commons-collections",
+  "target_preimage": "3df539acc3258628ffb17d6064b204a61a79eb3c",
+  "canonical_repository": "hsoliwal/com.synexia",
+  "canonical_commit": "763d2ad85a7201989b84814600c0619265199492",
+  "canonical_pull_request": "https://github.com/hsoliwal/com.synexia/pull/17304",
+  "canonical_source_pin": "76fc33c67ab4c8a8efc016e042a4e02355aabd2e",
+  "dataset": "synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/datasets/commons-fork-hotpaths-20261113",
+  "qualification": "synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/qualification/commons-fork-hotpaths-20261113",
+  "recipe": "com.synexia.m3jdk.CollectionsContractRefinement20261017",
+  "engine": "com.synexia.rewrite.M3HashPinnedJavaSnapshotRecipe",
+  "outputs": [
+    {
+      "path": "src/main/java/com/m3/collections/apache/list/TreeList.java",
+      "sha256": "9f21fcf97ad5bda55f3b9885a0e050fd93a72685c3d6472ab66ca58ab8aa6c98"
+    },
+    {
+      "path": "src/main/java/com/m3/collections/apache/queue/CircularFifoQueue.java",
+      "sha256": "f9d475ffd7622aa1b37b6569c5324cd31fad38867f3757234fc6307f9190c028"
+    },
+    {
+      "path": "src/test/java/com/m3/collections/apache/queue/CircularFifoQueueArrayStorageTest.java",
+      "sha256": "1961a86f43cfd84dafd672519738b86a2ff78c0512a1176b97aad8f221c7f9b3"
+    },
+    {
+      "path": "src/test/java/com/m3/collections/apache/queue/CircularFifoQueueToArrayTest.java",
+      "sha256": "50487feb448e779c9014a1190b316a1b521bbd1934da6a83627d44fd4e587c26"
+    }
+  ],
+  "changes": [
+    "CircularFifoQueue exports exact-class live ring spans directly to API-owned arrays, with empty/singleton guards and inherited behavior for subclasses.",
+    "TreeList SlotStore get/min/max use integer cursor loops over the same ranked and threaded AVL arrays.",
+    "Fourteen independent array-export regression tests cover order, identity, destination semantics, typed partial writes, serialization, generators and subclass behavior.",
+    "The compatibility gate permits only two exact inherited toArray overrides while preserving earlier declarations and checking the effective API and every storage field."
+  ],
+  "compatibility": {
+    "callable_public_protected_signatures": "preserved",
+    "declared_reflection_delta": "CircularFifoQueue now declares Object[] toArray() and <T> T[] toArray(T[]), previously inherited from AbstractCollection.",
+    "retained_fields_and_serialization": "unchanged",
+    "java_source_api_level": 8,
+    "qualification_runtime": 21,
+    "java8_runtime_execution": "not performed",
+    "vm_exception_messages_and_stack_frames": "not asserted byte-identical"
+  },
+  "executed_checks": {
+    "main_source_compile": {
+      "release": 8,
+      "source_count": 367,
+      "result": "PASS"
+    },
+    "baseline_affected_tests": {
+      "passed": 134,
+      "failed": 0,
+      "skipped": 0
+    },
+    "initial_candidate_with_historical_declared_method_gate": {
+      "passed": 133,
+      "failed": 1,
+      "evidence": "retained"
+    },
+    "final_affected_tests": {
+      "passed": 148,
+      "failed": 0,
+      "skipped": 0,
+      "aborted": 0
+    },
+    "bounded_api_gate_unchanged_baseline": "PASS",
+    "added_public_method_negative_candidate": "REJECTED_AS_EXPECTED",
+    "added_private_transient_field_negative_candidate": "REJECTED_AS_EXPECTED",
+    "tree_differential": {
+      "seeds": 12,
+      "operations": 72000,
+      "observations": 3087052,
+      "result": "PASS"
+    },
+    "real_recipe_sdk_junit": {
+      "passed": 17,
+      "failed": 0,
+      "skipped": 0
+    },
+    "recipe_input_contract_python": {
+      "passed": 23
+    },
+    "receiver_integrity": {
+      "passed": 9,
+      "targets": 4
+    },
+    "receiver_apply": {
+      "changes": 4,
+      "actual_sdk_results": true
+    },
+    "receiver_check": {
+      "changes": 0,
+      "actual_sdk_results": true
+    }
+  },
+  "performance": {
+    "method": "Standalone consumed-output shared-host comparative probes; not JMH or application-wide performance guarantees.",
+    "queue_method": "Within each fresh JVM, median of five 125ms rounds after three 100ms warmups. Report median of per-pair CPU ratios; retain both variant medians and all samples. Three alternating JVM pairs at1024/65536, one pair at0/1/32.",
+    "queue_raw_samples": 540,
+    "queue_checksum_parity": "PASS all paired workloads",
+    "queue_wrapped_results": [
+      {
+        "size": 1024,
+        "operation": "objectReuse",
+        "median_paired_cpu_speedup": 24.709011012506583
+      },
+      {
+        "size": 1024,
+        "operation": "raw",
+        "median_paired_cpu_speedup": 9.51147360565326
+      },
+      {
+        "size": 1024,
+        "operation": "typedReuse",
+        "median_paired_cpu_speedup": 2.85557330732549
+      },
+      {
+        "size": 65536,
+        "operation": "objectReuse",
+        "median_paired_cpu_speedup": 26.769773264437152
+      },
+      {
+        "size": 65536,
+        "operation": "raw",
+        "median_paired_cpu_speedup": 9.21742990609921
+      },
+      {
+        "size": 65536,
+        "operation": "typedReuse",
+        "median_paired_cpu_speedup": 2.5190532785425495
+      }
+    ],
+    "tree_method": "median of 3 process medians, each with 5 measured rounds",
+    "tree_size": 65536,
+    "tree_results": [
+      {
+        "layout": "balanced",
+        "operation": "indexedGet",
+        "baseline_cpu_ns": 270.3533579058352,
+        "candidate_cpu_ns": 223.85416816262637,
+        "cpu_reduction_percent": 17.19941268841374
+      },
+      {
+        "layout": "balanced",
+        "operation": "indexedSet",
+        "baseline_cpu_ns": 273.7048152043269,
+        "candidate_cpu_ns": 246.38142903645834,
+        "cpu_reduction_percent": 9.982793378140254
+      },
+      {
+        "layout": "balanced",
+        "operation": "forwardIteration",
+        "baseline_cpu_ns": 623784.927680798,
+        "candidate_cpu_ns": 331740.0358565737,
+        "cpu_reduction_percent": 46.8182026952836
+      },
+      {
+        "layout": "balanced",
+        "operation": "reverseIteration",
+        "baseline_cpu_ns": 1108588.4867256638,
+        "candidate_cpu_ns": 1013522.4008097165,
+        "cpu_reduction_percent": 8.575417032945666
+      },
+      {
+        "layout": "recycled",
+        "operation": "indexedGet",
+        "baseline_cpu_ns": 270.7490882535951,
+        "candidate_cpu_ns": 244.474154296875,
+        "cpu_reduction_percent": 9.704532756213712
+      },
+      {
+        "layout": "recycled",
+        "operation": "indexedSet",
+        "baseline_cpu_ns": 360.69927045036764,
+        "candidate_cpu_ns": 288.65737396816036,
+        "cpu_reduction_percent": 19.972842304963923
+      },
+      {
+        "layout": "recycled",
+        "operation": "forwardIteration",
+        "baseline_cpu_ns": 1681248.577181208,
+        "candidate_cpu_ns": 1260547.1959798995,
+        "cpu_reduction_percent": 25.02315165712491
+      },
+      {
+        "layout": "recycled",
+        "operation": "reverseIteration",
+        "baseline_cpu_ns": 2296180.247706422,
+        "candidate_cpu_ns": 2130216.584745763,
+        "cpu_reduction_percent": 7.227815112791546
+      }
+    ],
+    "initial_small_queue_regression": "retained in canonical evidence; corrected with empty/singleton/no-second-span guards",
+    "small_workloads": "one paired run each; no universal speedup claim",
+    "allocation": "No new collection fields; required result-array allocation remains; reused destinations measured zero candidate bytes per operation.",
+    "rss": "Whole-process RSS is retained as diagnostic evidence and is not an isolated collection retained-heap measurement."
+  },
+  "remaining_gates": [
+    "Full original fork Maven lifecycle blocked locally by unavailable offline org.apache.commons:commons-parent:106.",
+    "Focused source/JUnit qualification used recorded cached dependency versions, including Codec 1.22.1-synexia-source-1, Lang 3.18.0, IO 2.21.0 and JUnit Console 1.10.2; it does not establish the full POM dependency gate.",
+    "Remote CI and merge remain pending at receipt creation."
+  ]
+}

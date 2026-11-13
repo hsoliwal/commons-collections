@@ -16,7 +16,7 @@
  */
 // Array-operation contribution: Copyright (c) 2026 Hitesh Soliwal and Synexia contributors.
 // Modified 2026 by Hitesh Soliwal and Contributors to the Synexia Project:
-// bounded contiguous-span compaction of the existing array-owned ring.
+// bounded contiguous-span compaction and array export of the existing array-owned ring.
 package com.m3.collections.apache.queue;
 
 import java.io.IOException;
@@ -24,6 +24,7 @@ import java.io.InvalidObjectException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
+import java.lang.reflect.Array;
 import java.util.AbstractCollection;
 import java.util.Arrays;
 import java.util.Collection;
@@ -161,6 +162,27 @@ public class CircularFifoQueue<E> extends AbstractCollection<E>
         full = false;
         start = 0;
         end = 0;
+    }
+
+    /**
+     * Copies the live ring spans in FIFO order into an API-owned array.
+     *
+     * @param array The destination array.
+     * @param size The number of live elements to copy.
+     */
+    private void copyElements(final Object[] array, final int size) {
+        if (size == 0) {
+            return;
+        }
+        if (size == 1) {
+            array[0] = elements[start];
+            return;
+        }
+        final int firstSpan = Math.min(size, maxElements - start);
+        System.arraycopy(elements, start, array, 0, firstSpan);
+        if (firstSpan < size) {
+            System.arraycopy(elements, 0, array, firstSpan, size - firstSpan);
+        }
     }
 
     /**
@@ -432,6 +454,52 @@ public class CircularFifoQueue<E> extends AbstractCollection<E>
         }
 
         return size;
+    }
+
+    /**
+     * Returns a new array containing the queue elements in FIFO order.
+     *
+     * @return An independent array containing the queue elements.
+     */
+    @Override
+    public Object[] toArray() {
+        if (getClass() != CircularFifoQueue.class) {
+            // Subclasses may expose a different iterator or size.
+            return super.toArray();
+        }
+        final int size = size();
+        final Object[] array = new Object[size];
+        copyElements(array, size);
+        return array;
+    }
+
+    /**
+     * Copies the queue elements in FIFO order into an array of the requested type.
+     * A sufficiently large input array is reused and, if larger than the queue,
+     * its first unused position is set to {@code null}.
+     *
+     * @param <T> The component type of the destination array.
+     * @param array The destination array, or an array specifying the result type.
+     * @return The input array if large enough; otherwise a new array of the same type.
+     * @throws NullPointerException if the input array is null.
+     * @throws ArrayStoreException if a queue element is incompatible with the array type.
+     */
+    @Override
+    @SuppressWarnings("unchecked")
+    public <T> T[] toArray(final T[] array) {
+        if (getClass() != CircularFifoQueue.class) {
+            return super.toArray(array);
+        }
+        final int size = size();
+        final T[] result = array.length >= size ? array
+                : (T[]) Array.newInstance(array.getClass().getComponentType(), size);
+        // Copy the first span before the second to preserve the successful prefix
+        // in the caller's array if an incompatible element causes ArrayStoreException.
+        copyElements(result, size);
+        if (result.length > size) {
+            result[size] = null;
+        }
+        return result;
     }
 
     /**
