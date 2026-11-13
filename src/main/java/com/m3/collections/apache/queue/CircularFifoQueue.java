@@ -430,6 +430,44 @@ public class CircularFifoQueue<E> extends AbstractCollection<E>
         }
     }
 
+    /**
+     * Removes the first matching ring element without allocating an iterator.
+     *
+     * <p>The physical cursor and the removal path reproduce the inherited
+     * AbstractCollection iterator algorithm, including candidate-equals
+     * callback timing, the head fast path, and contiguous suffix shifts.
+     * Subclasses retain their iterator-based removal contract.</p>
+     *
+     * @param candidate the value to remove, possibly null
+     * @return true if a matching element was found
+     */
+    @Override
+    public boolean remove(final Object candidate) {
+        if (getClass() != CircularFifoQueue.class) {
+            return super.remove(candidate);
+        }
+        int cursor = start;
+        boolean first = full;
+        while (first || cursor != end) {
+            first = false;
+            final int returned = cursor;
+            cursor = increment(cursor);
+            final E element = elements[returned];
+            if (candidate == null ? element == null : candidate.equals(element)) {
+                if (returned == start) {
+                    remove();
+                } else {
+                    shiftSuffixTowardRemovedSlot(returned);
+                    end = decrement(end);
+                    elements[end] = null;
+                    full = false;
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
     @Override
     public E remove() {
         if (isEmpty()) {
