@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+// Modified 2026-11-13 by Hitesh Soliwal and Synexia contributors: direct array/bitmap hot paths.
 package com.m3.collections.apache.bloomfilter;
 
 import java.util.Arrays;
@@ -76,7 +77,11 @@ public final class SimpleBloomFilter implements BloomFilter<SimpleBloomFilter> {
         // Lazy evaluation with caching
         int c = cardinality;
         if (c < 0) {
-            cardinality = c = SetOperations.cardinality(this);
+            c = 0;
+            for (final long word : bitMap) {
+                c += Long.bitCount(word);
+            }
+            cardinality = c;
         }
         return c;
     }
@@ -176,6 +181,28 @@ public final class SimpleBloomFilter implements BloomFilter<SimpleBloomFilter> {
 
     @Override
     public boolean processBitMapPairs(final BitMapExtractor other, final LongBiPredicate func) {
+        if (other instanceof SimpleBloomFilter) {
+            final long[] otherBits = ((SimpleBloomFilter) other).bitMap;
+            final int common = Math.min(bitMap.length, otherBits.length);
+            int index = 0;
+            for (; index < common; index++) {
+                if (!func.test(bitMap[index], otherBits[index])) {
+                    return false;
+                }
+            }
+            for (; index < otherBits.length; index++) {
+                if (!func.test(0L, otherBits[index])) {
+                    return false;
+                }
+            }
+            for (; index < bitMap.length; index++) {
+                if (!func.test(bitMap[index], 0L)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        // Arbitrary producers retain their callback and short-circuit behavior.
         final CountingLongPredicate p = new CountingLongPredicate(bitMap, func);
         return other.processBitMaps(p) && p.processRemaining();
     }
@@ -194,6 +221,16 @@ public final class SimpleBloomFilter implements BloomFilter<SimpleBloomFilter> {
     @Override
     public boolean processIndices(final IntPredicate consumer) {
         Objects.requireNonNull(consumer, "consumer");
-        return IndexExtractor.fromBitMapExtractor(this).processIndices(consumer);
+        int wordIndex = 0;
+        for (long word : bitMap) {
+            while (word != 0) {
+                if (!consumer.test(wordIndex + Long.numberOfTrailingZeros(word))) {
+                    return false;
+                }
+                word &= word - 1;
+            }
+            wordIndex += Long.SIZE;
+        }
+        return true;
     }
 }

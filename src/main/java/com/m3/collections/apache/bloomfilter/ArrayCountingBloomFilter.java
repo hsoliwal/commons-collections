@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 // Modified 2026-11-13 by Hitesh Soliwal and Synexia contributors: maintain positive-cell cardinality and export directly.
+// Modified 2026-11-13 by Hitesh Soliwal and Synexia contributors: direct array/bitmap hot paths.
 package com.m3.collections.apache.bloomfilter;
 
 import java.util.Arrays;
@@ -138,6 +139,31 @@ public final class ArrayCountingBloomFilter implements CountingBloomFilter {
             throw new IllegalArgumentException(
                     String.format("Filter only accepts values in the [0,%d) range", getShape().getNumberOfBits()), e);
         }
+    }
+
+    @Override
+    public long[] asBitMapArray() {
+        final long[] result = new long[BitMaps.numberOfBitMaps(cells.length)];
+        int index = 0;
+        final int lastBlock = result.length - 1;
+        for (int block = 0; block < lastBlock; block++) {
+            long word = 0L;
+            for (int bit = 0; bit < Long.SIZE; bit++) {
+                if (cells[index++] != 0) {
+                    word |= 1L << bit;
+                }
+            }
+            result[block] = word;
+        }
+        // The final block may be partial. Negative invalid-state cells remain enabled.
+        long word = 0L;
+        for (int bit = 0; index < cells.length; bit++) {
+            if (cells[index++] != 0) {
+                word |= 1L << bit;
+            }
+        }
+        result[lastBlock] = word;
+        return result;
     }
 
     @Override
