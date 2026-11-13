@@ -18,6 +18,7 @@
 // qualify nonrecursive traversal of array-owned threaded AVL slots.
 package com.m3.collections.apache.list;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -140,6 +141,68 @@ class TreeListThreadedIndexLookupTest {
                 }
             }
             assertEquals(expected, actual);
+        }
+    }
+
+    @Test
+    void threadedArrayExportMatchesArrayListAfterRankRotationsAndSlotRecycling() {
+        final Random random = new Random(0x4d33544f41525241L);
+        for (int seed = 0; seed < 9; seed++) {
+            final TreeList<Integer> actual = new TreeList<>();
+            final ArrayList<Integer> reference = new ArrayList<>();
+            for (int step = 0; step < 2400; step++) {
+                final int operation = random.nextInt(7);
+                final Integer value = random.nextInt(11) == 0
+                        ? null : Integer.valueOf(random.nextInt(211) - 105);
+                if (reference.isEmpty() || (operation < 3 && reference.size() < 384)) {
+                    final int at = random.nextInt(reference.size() + 1);
+                    reference.add(at, value);
+                    actual.add(at, value);
+                } else if (operation == 3) {
+                    final int at = random.nextInt(reference.size());
+                    assertEquals(reference.remove(at), actual.remove(at));
+                } else if (operation == 4) {
+                    final int at = random.nextInt(reference.size());
+                    assertEquals(reference.set(at, value), actual.set(at, value));
+                } else if (operation == 5) {
+                    final int at = random.nextInt(reference.size());
+                    final ListIterator<Integer> expected = reference.listIterator(at);
+                    final ListIterator<Integer> candidate = actual.listIterator(at);
+                    assertEquals(expected.next(), candidate.next());
+                    expected.remove();
+                    candidate.remove();
+                } else if (operation == 6 && (step & 255) == 0) {
+                    actual.clear();
+                    reference.clear();
+                }
+                if ((step & 15) == 0) {
+                    final Object[] exported = actual.toArray();
+                    assertArrayEquals(reference.toArray(), exported,
+                            "seed=" + seed + " step=" + step);
+                    if (exported.length != 0) {
+                        // Raw exports must not retain the parent-owned value array.
+                        final Integer first = reference.get(0);
+                        exported[0] = new Object();
+                        assertEquals(first, actual.get(0));
+                    }
+                }
+            }
+            assertArrayEquals(reference.toArray(), actual.toArray(), "final seed=" + seed);
+        }
+
+        for (int length : new int[] {0, 1, 2, 3, 7, 31, 127, 4096, 16384}) {
+            final TreeList<Integer> actual = new TreeList<>();
+            final ArrayList<Integer> reference = new ArrayList<>();
+            for (int i = 0; i < length; i++) {
+                final Integer value = (i % 29) == 0 ? null : Integer.valueOf(i % 101);
+                actual.add(value);
+                reference.add(value);
+            }
+            assertArrayEquals(reference.toArray(), actual.toArray(), "length=" + length);
+            final TreeList<Integer> derived = new TreeList<Integer>() { };
+            derived.addAll(reference);
+            assertArrayEquals(reference.toArray(), derived.toArray(),
+                    "subclass raw export length=" + length);
         }
     }
 
