@@ -17,6 +17,7 @@
 // Modified 2026 by Hitesh Soliwal and Contributors to the Synexia Project:
 // array slot/index/mask lowering of the existing ranked, threaded AVL algorithm.
 // Modified 2026 by Hitesh Soliwal and Synexia contributors: iterative ranked and extremal slot traversal.
+// Modified 2026 by Hitesh Soliwal and contributors: direct typed export over existing slot indices.
 package com.m3.collections.apache.list;
 
 import java.util.AbstractList;
@@ -964,6 +965,37 @@ public class TreeList<E> extends AbstractList<E> {
             slots.toArray(root, array, slots.relativePosition[root]);
         }
         return array;
+    }
+
+    /**
+     * Copies the encounter order into an array of the requested runtime type.
+     * Subclasses retain the inherited size and iterator dispatch.
+     *
+     * @param <T> the array component type
+     * @param array the destination, or the runtime type of a new destination
+     * @return the destination containing the elements in list order
+     * @throws NullPointerException if the array is null
+     * @throws ArrayStoreException if an element is incompatible with the array
+     */
+    @Override
+    @SuppressWarnings("unchecked")
+    public <T> T[] toArray(final T[] array) {
+        if (getClass() != TreeList.class) {
+            return super.toArray(array);
+        }
+        final int length = size;
+        final T[] result = array.length >= length ? array
+                : (T[]) java.lang.reflect.Array.newInstance(array.getClass().getComponentType(), length);
+        int slot = root == -1 ? -1 : slots.min(root);
+        for (int index = 0; index < length; index++) {
+            // Store in encounter order, preserving the successful prefix on a type failure.
+            result[index] = (T) slots.values[slot];
+            slot = slots.next(slot);
+        }
+        if (result.length > length) {
+            result[length] = null;
+        }
+        return result;
     }
 
 }
