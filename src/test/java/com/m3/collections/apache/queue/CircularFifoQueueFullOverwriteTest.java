@@ -10,7 +10,6 @@ package com.m3.collections.apache.queue;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -196,6 +195,7 @@ public final class CircularFifoQueueFullOverwriteTest {
     }
 
     private static final class HookedQueue extends CircularFifoQueue<Value> {
+        private static final long serialVersionUID = 1L;
         int checks;
         int removed;
 
