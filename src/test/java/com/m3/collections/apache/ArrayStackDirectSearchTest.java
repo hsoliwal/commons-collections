@@ -118,6 +118,11 @@ class ArrayStackDirectSearchTest {
                 stack.remove(0);
                 return false;
             }
+
+            @Override
+            public int hashCode() {
+                return 0;
+            }
         }
         final DeletingNeedle needle = new DeletingNeedle();
         assertEquals(-1, stack.search(needle));
