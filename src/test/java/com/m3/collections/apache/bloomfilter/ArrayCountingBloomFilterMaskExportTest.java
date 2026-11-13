@@ -39,6 +39,21 @@ class ArrayCountingBloomFilterMaskExportTest {
         assertArrayEquals(expected, first);
         assertArrayEquals(expected, second);
         assertNotSame(first, second);
+        int positive = 0;
+        for (final int count : counts) {
+            if (count > 0) {
+                positive++;
+            }
+        }
+        final int[] expectedIndices = new int[positive];
+        int at = 0;
+        for (int i = 0; i < counts.length; i++) {
+            if (counts[i] > 0) {
+                expectedIndices[at++] = i;
+            }
+        }
+        assertArrayEquals(expectedIndices, filter.asIndexArray(),
+                "positive-only sparse/dense index export must match the cell oracle");
         if (first.length > 0) {
             first[0] ^= -1L;
             assertArrayEquals(expected, filter.asBitMapArray(), "export must not alias owner state");

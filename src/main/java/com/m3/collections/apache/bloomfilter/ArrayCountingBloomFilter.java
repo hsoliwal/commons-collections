@@ -181,9 +181,26 @@ public final class ArrayCountingBloomFilter implements CountingBloomFilter {
     public int[] asIndexArray() {
         final int[] indices = new int[cardinality()];
         int offset = 0;
-        for (int i = 0; i < cells.length; i++) {
-            if (cells[i] > 0) {
-                indices[offset++] = i;
+        if (nonzeroCount > cells.length / 4) {
+            // Dense arrays retain the original direct primitive scan.
+            for (int i = 0; i < cells.length; i++) {
+                if (cells[i] > 0) {
+                    indices[offset++] = i;
+                }
+            }
+        } else {
+            // Sparse arrays reuse the already maintained occupancy words.
+            // Negative cells remain masked but are excluded from this
+            // positive-only index export, exactly as in the original loop.
+            for (int word = 0; word < nonzeroMask.length; word++) {
+                long remaining = nonzeroMask[word];
+                while (remaining != 0L) {
+                    final int index = (word << 6) + Long.numberOfTrailingZeros(remaining);
+                    if (cells[index] > 0) {
+                        indices[offset++] = index;
+                    }
+                    remaining &= remaining - 1L;
+                }
             }
         }
         return indices;
