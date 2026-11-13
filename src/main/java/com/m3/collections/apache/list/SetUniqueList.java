@@ -374,8 +374,53 @@ public class SetUniqueList<E> extends AbstractSerializableListDecorator<E> {
         return result;
     }
 
+    /** Stable final-value equality is required before reordering individual removals. */
+    private static boolean isStableBulkValue(final Object value) {
+        return value == null || value.getClass() == String.class
+                || value.getClass() == Integer.class || value.getClass() == Long.class;
+    }
+
     @Override
     public boolean removeAll(final Collection<?> coll) {
+        // The exact ArrayList/HashSet combination can compact one backing-array
+        // span instead of repeatedly scanning and shifting it for every key.
+        // Preserve virtual list/set, subclass, and custom-equals behavior.
+        if (getClass() == SetUniqueList.class
+                && decorated().getClass() == ArrayList.class
+                && set.getClass() == HashSet.class
+                && coll.getClass() == HashSet.class
+                && size() >= 256 && coll.size() >= 64) {
+            final List<E> list = decorated();
+            if (set.size() == list.size()) {
+                // A caller can still mutate the externally supplied backing
+                // list. Admit only the exact, duplicate-free set/list identity.
+                final Set<Object> observed = new HashSet<>(list.size());
+                boolean safe = true;
+                for (final E element : list) {
+                    if (!isStableBulkValue(element)
+                            || !observed.add(element) || !set.contains(element)) {
+                        safe = false;
+                        break;
+                    }
+                }
+                if (safe) {
+                    for (final Object element : coll) {
+                        if (!isStableBulkValue(element)) {
+                            safe = false;
+                            break;
+                        }
+                    }
+                }
+                if (safe) {
+                    final boolean changed = list.removeAll(coll);
+                    if (changed) {
+                        set.removeAll(coll);
+                    }
+                    return changed;
+                }
+            }
+        }
+
         boolean result = false;
         for (final Object name : coll) {
             result |= remove(name);
