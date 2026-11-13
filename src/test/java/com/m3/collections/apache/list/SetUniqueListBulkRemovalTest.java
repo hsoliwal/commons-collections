@@ -100,7 +100,7 @@ final class SetUniqueListBulkRemovalTest {
     @Test
     void preexistingInconsistentExternalBackingForcesLegacySemantics() {
         final ArrayList<String> backing = new ArrayList<>();
-        for (int i = 0; i < 512; i++) {
+        for (int i = 0; i < 16_384; i++) {
             backing.add("key-" + i);
         }
         final SetUniqueList<String> actual = SetUniqueList.setUniqueList(backing);
@@ -109,7 +109,7 @@ final class SetUniqueListBulkRemovalTest {
         final Set<String> membership = new HashSet<>(actual.asSet());
         final HashSet<String> remove = new HashSet<>();
         remove.add("key-0"); // Set contains this key, while backing list no longer does.
-        for (int i = 2_000; i < 2_064; i++) {
+        for (int i = 2_000; i < 3_024; i++) {
             remove.add("absent-" + i);
         }
 
@@ -122,17 +122,17 @@ final class SetUniqueListBulkRemovalTest {
     @Test
     void linkedInputAndLinkedBackingKeepLegacyPath() {
         final LinkedList<String> backing = new LinkedList<>();
-        for (int i = 0; i < 512; i++) {
+        for (int i = 0; i < 16_384; i++) {
             backing.add("key-" + i);
         }
         final SetUniqueList<String> actual = SetUniqueList.setUniqueList(backing);
         final LinkedHashSet<String> remove = new LinkedHashSet<>();
-        for (int i = 0; i < 200; i++) {
+        for (int i = 0; i < 1_024; i++) {
             remove.add("key-" + i);
         }
         assertTrue(actual.removeAll(remove));
-        assertEquals(312, actual.size());
-        assertEquals("key-200", actual.get(0));
+        assertEquals(15_360, actual.size());
+        assertEquals("key-1024", actual.get(0));
     }
 
     @Test
@@ -152,17 +152,17 @@ final class SetUniqueListBulkRemovalTest {
             }
         }
         final ArrayList<String> backing = new ArrayList<>();
-        for (int i = 0; i < 512; i++) {
+        for (int i = 0; i < 16_384; i++) {
             backing.add("key-" + i);
         }
         final Tracking actual = new Tracking(backing, new HashSet<>(backing));
         final HashSet<String> remove = new HashSet<>();
-        for (int i = 0; i < 128; i++) {
+        for (int i = 0; i < 1_024; i++) {
             remove.add("key-" + i);
         }
         assertTrue(actual.removeAll(remove));
         assertEquals(remove.size(), actual.removalCalls);
-        assertEquals(384, actual.size());
+        assertEquals(15_360, actual.size());
     }
 
     @Test
@@ -188,16 +188,16 @@ final class SetUniqueListBulkRemovalTest {
             }
         }
         final ArrayList<CountingValue> backing = new ArrayList<>();
-        for (int i = 0; i < 512; i++) {
+        for (int i = 0; i < 16_384; i++) {
             backing.add(new CountingValue(i));
         }
         final SetUniqueList<CountingValue> actual = SetUniqueList.setUniqueList(backing);
         final HashSet<CountingValue> remove = new HashSet<>();
-        for (int i = 0; i < 128; i++) {
+        for (int i = 0; i < 1_024; i++) {
             remove.add(new CountingValue(i));
         }
         assertTrue(actual.removeAll(remove));
-        assertEquals(384, actual.size());
+        assertEquals(15_360, actual.size());
         assertTrue(remove.stream().anyMatch(e -> e.comparisons > 0));
     }
 }
