@@ -218,8 +218,24 @@ public final class ArrayCountingBloomFilter implements CountingBloomFilter {
 
     @Override
     public void clear() {
-        Arrays.fill(cells, 0);
-        Arrays.fill(nonzeroMask, 0L);
+        if (nonzeroCount > cells.length / Long.SIZE) {
+            // Retain bulk zeroing for densely occupied counter arrays.
+            Arrays.fill(cells, 0);
+            Arrays.fill(nonzeroMask, 0L);
+        } else if (nonzeroCount != 0) {
+            // The mask includes negative cells; positive cardinality does not.
+            for (int word = 0; word < nonzeroMask.length; word++) {
+                long remaining = nonzeroMask[word];
+                if (remaining != 0L) {
+                    do {
+                        cells[(word << 6) + Long.numberOfTrailingZeros(remaining)] = 0;
+                        remaining &= remaining - 1L;
+                    } while (remaining != 0L);
+                    nonzeroMask[word] = 0L;
+                }
+            }
+        }
+        // Deliberately retain the permanent invalid-state history.
         cardinality = 0;
         nonzeroCount = 0;
     }
