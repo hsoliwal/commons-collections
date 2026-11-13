@@ -302,11 +302,25 @@ public class TreeList<E> extends AbstractList<E> {
         }
 
         /**
-         * Export the array-owned AVL entries without recursive stack frames.
-         * Descend to the first live slot once; thereafter use the existing
-         * threaded successor indexes in FIFO/list encounter order.
+         * Original rank-addressed recursive export, retained for subclasses.
+         * Subclasses can override size() and observe its original failure order.
          */
         private void toArray(final int slot, final Object[] array, final int index) {
+            array[index] = values[slot];
+            if (leftSubTree(slot) != NONE) {
+                toArray(left[slot], array, index + relativePosition[left[slot]]);
+            }
+            if (rightSubTree(slot) != NONE) {
+                toArray(right[slot], array, index + relativePosition[right[slot]]);
+            }
+        }
+
+        /**
+         * Export the array-owned AVL slots without recursive stack frames.
+         * Descend to the first live slot once; thereafter follow the existing
+         * threaded successor indexes, keeping exactly the original list order.
+         */
+        private void toArrayThreaded(final int slot, final Object[] array, final int index) {
             int cursor = slot;
             int position = index;
             while (leftSubTree(cursor) != NONE) {
@@ -978,7 +992,12 @@ public class TreeList<E> extends AbstractList<E> {
         // override to go 20% faster
         final Object[] array = new Object[size()];
         if (root != -1) {
-            slots.toArray(root, array, slots.relativePosition[root]);
+            if (getClass() == TreeList.class) {
+                slots.toArrayThreaded(root, array, slots.relativePosition[root]);
+            } else {
+                // Preserve the original rank-addressed export for subclasses.
+                slots.toArray(root, array, slots.relativePosition[root]);
+            }
         }
         return array;
     }
