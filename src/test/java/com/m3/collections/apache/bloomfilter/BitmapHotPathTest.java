@@ -11,5 +11,6 @@ class BitmapHotPathTest {
     @Test
     void preservesExtractionPairingAndCountingContracts() {
         BitmapHotPathContract.verify();
+        BitmapMergeContract.verify();
     }
 }

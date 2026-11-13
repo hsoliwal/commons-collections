@@ -126,15 +126,24 @@ public final class SimpleBloomFilter implements BloomFilter<SimpleBloomFilter> {
     public boolean merge(final BitMapExtractor bitMapExtractor) {
         Objects.requireNonNull(bitMapExtractor, "bitMapExtractor");
         try {
-            final int[] idx = new int[1];
-            bitMapExtractor.processBitMaps(value -> {
-                bitMap[idx[0]++] |= value;
-                return true;
-            });
-            // idx[0] will be limit+1 so decrement it
-            idx[0]--;
+            final int lastIndex;
+            if (bitMapExtractor instanceof SimpleBloomFilter) {
+                final long[] otherBits = ((SimpleBloomFilter) bitMapExtractor).bitMap;
+                for (int index = 0; index < otherBits.length; index++) {
+                    // Preserve successful-prefix writes before an oversized input fails.
+                    bitMap[index] |= otherBits[index];
+                }
+                lastIndex = otherBits.length - 1;
+            } else {
+                final int[] idx = new int[1];
+                bitMapExtractor.processBitMaps(value -> {
+                    bitMap[idx[0]++] |= value;
+                    return true;
+                });
+                lastIndex = idx[0] - 1;
+            }
             final int idxLimit = BitMaps.getLongIndex(shape.getNumberOfBits());
-            if (idxLimit == idx[0]) {
+            if (idxLimit == lastIndex) {
                 final long excess = bitMap[idxLimit] >> shape.getNumberOfBits();
                 if (excess != 0) {
                     throw new IllegalArgumentException(

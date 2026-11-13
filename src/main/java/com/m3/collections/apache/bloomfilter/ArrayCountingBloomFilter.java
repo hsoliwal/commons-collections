@@ -144,6 +144,11 @@ public final class ArrayCountingBloomFilter implements CountingBloomFilter {
     @Override
     public long[] asBitMapArray() {
         final long[] result = new long[BitMaps.numberOfBitMaps(cells.length)];
+        // A valid filter has no negative cells, so the existing count proves emptiness.
+        // Invalid filters must still export negative cells and use the unchanged loop.
+        if (state >= 0 && cardinality == 0) {
+            return result;
+        }
         int index = 0;
         final int lastBlock = result.length - 1;
         for (int block = 0; block < lastBlock; block++) {
