@@ -22,7 +22,6 @@ import java.io.ObjectOutputStream;
 import java.util.AbstractCollection;
 import java.util.AbstractMap;
 import java.util.AbstractSet;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Map;
@@ -194,17 +193,41 @@ public abstract class AbstractMultiValuedMap<K, V> implements MultiValuedMap<K, 
         public Iterator<Entry<K, V>> iterator() {
             return new LazyIteratorChain<Entry<K, V>>() {
 
-                final Collection<K> keysCol = new ArrayList<>(getMap().keySet());
-                final Iterator<K> keyIterator = keysCol.iterator();
+                // Retain the original stable key snapshot without an ArrayList and its iterator.
+                // An array also avoids allocating a collection wrapper per entries() cursor.
+                private final Object[] keys = getMap().keySet().toArray();
+                private int keyIndex;
 
                 @Override
                 protected Iterator<? extends Entry<K, V>> nextIterator(final int count) {
-                    if (!keyIterator.hasNext()) {
+                    if (keyIndex == keys.length) {
                         return null;
                     }
-                    final K key = keyIterator.next();
-                    final Transformer<V, Entry<K, V>> entryTransformer = input -> new MultiValuedMapEntry(key, input);
-                    return new TransformIterator<>(new ValuesIterator(key), entryTransformer);
+                    @SuppressWarnings("unchecked")
+                    final K key = (K) keys[keyIndex++];
+                    final Collection<V> values = getMap().get(key);
+                    final Iterator<V> valueIterator = values.iterator();
+                    // One cursor per key replaces ValuesIterator + TransformIterator + lambda.
+                    // Keep the incumbent mutable-key removal semantics and encounter order.
+                    return new Iterator<Entry<K, V>>() {
+                        @Override
+                        public boolean hasNext() {
+                            return valueIterator.hasNext();
+                        }
+
+                        @Override
+                        public Entry<K, V> next() {
+                            return new MultiValuedMapEntry(key, valueIterator.next());
+                        }
+
+                        @Override
+                        public void remove() {
+                            valueIterator.remove();
+                            if (values.isEmpty()) {
+                                AbstractMultiValuedMap.this.remove(key);
+                            }
+                        }
+                    };
                 }
             };
         }
