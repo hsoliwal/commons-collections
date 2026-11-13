@@ -32,11 +32,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.AbstractMap;
+import java.util.ArrayList;
 import java.util.ConcurrentModificationException;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.TreeMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
 
@@ -44,6 +51,35 @@ import com.m3.collections.apache.OrderedMapIterator;
 
 /** Contracts for the owning dual-index arrays and their caller-owned projections. */
 class TreeBidiMapArrayStorageTest {
+
+    private static final class CallbackValue implements Comparable<CallbackValue> {
+        private final int order;
+        private int hash;
+        private Runnable onHash;
+
+        CallbackValue(final int order) {
+            this.order = order;
+            hash = order * 31;
+        }
+
+        @Override
+        public int compareTo(final CallbackValue other) {
+            return Integer.compare(order, other.order);
+        }
+
+        @Override
+        public boolean equals(final Object other) {
+            return this == other;
+        }
+
+        @Override
+        public int hashCode() {
+            if (onHash != null) {
+                onHash.run();
+            }
+            return hash;
+        }
+    }
 
     private static final class Value implements Comparable<Value> {
         private final int order;
@@ -76,6 +112,144 @@ class TreeBidiMapArrayStorageTest {
         final Field field = TreeBidiMap.class.getDeclaredField(name);
         field.setAccessible(true);
         return field.get(map);
+    }
+
+    private static void assertStableEntry(final Map.Entry<Integer, Integer> entry) {
+        final int key = entry.getKey();
+        final int value = 10000 + key * 17;
+        assertEquals(Integer.valueOf(value), entry.getValue());
+        assertEquals(key ^ value, entry.hashCode());
+    }
+
+    private static void awaitReaders(final AtomicInteger arrivals, final int expected) throws InterruptedException {
+        arrivals.incrementAndGet();
+        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        int spins = 0;
+        while (arrivals.get() < expected) {
+            if ((++spins & 1023) == 0) {
+                if (Thread.interrupted()) {
+                    throw new InterruptedException("Reader rendezvous interrupted");
+                }
+                assertTrue(System.nanoTime() < deadline, "Reader rendezvous timed out");
+                Thread.yield();
+            }
+        }
+    }
+
+    @Test
+    void concurrentStableEntryReadsSurviveJoinedRemovalAndClear() throws Exception {
+        final int readers = 8;
+        final ExecutorService executor = Executors.newFixedThreadPool(readers);
+        try {
+            for (int round = 0; round < 64; round++) {
+                final TreeBidiMap<Integer, Integer> map = new TreeBidiMap<>();
+                for (int key = 0; key < 32; key++) {
+                    map.put(key, 10000 + key * 17);
+                }
+                // Establish a partly occupied hash page before releasing independent readers.
+                map.entrySet().iterator().next();
+                final AtomicInteger arrivals = new AtomicInteger();
+                final List<Future<List<Map.Entry<Integer, Integer>>>> futures = new ArrayList<>();
+                for (int reader = 0; reader < readers; reader++) {
+                    futures.add(executor.submit(() -> {
+                        final List<Map.Entry<Integer, Integer>> saved = new ArrayList<>();
+                        final Iterator<Map.Entry<Integer, Integer>> iterator = map.entrySet().iterator();
+                        for (int key = 0; key < 32; key++) {
+                            awaitReaders(arrivals, readers * (key + 1));
+                            final Map.Entry<Integer, Integer> entry = iterator.next();
+                            assertEquals(Integer.valueOf(key), entry.getKey());
+                            assertEquals(Integer.valueOf(10000 + key * 17), entry.getValue());
+                            if ((key & 1) == 0) {
+                                assertStableEntry(entry);
+                            }
+                            saved.add(entry);
+                        }
+                        return saved;
+                    }));
+                }
+                final List<List<Map.Entry<Integer, Integer>>> saved = new ArrayList<>();
+                for (final Future<List<Map.Entry<Integer, Integer>>> future : futures) {
+                    saved.add(future.get(15, TimeUnit.SECONDS));
+                }
+                // All readers have joined before mutation; no concurrent writer is assumed.
+                synchronized (map) {
+                    for (int key = 0; key < 32; key += 2) {
+                        map.remove(key);
+                        map.put(1000 + key, 20000 + key);
+                    }
+                    map.clear();
+                    map.put(-1, -10000);
+                }
+                final List<Future<?>> detached = new ArrayList<>();
+                for (final List<Map.Entry<Integer, Integer>> entries : saved) {
+                    detached.add(executor.submit(() -> {
+                        for (final Map.Entry<Integer, Integer> entry : entries) {
+                            assertStableEntry(entry);
+                        }
+                    }));
+                }
+                for (final Future<?> future : detached) {
+                    future.get(15, TimeUnit.SECONDS);
+                }
+                for (final List<Map.Entry<Integer, Integer>> entries : saved) {
+                    for (final Map.Entry<Integer, Integer> entry : entries) {
+                        assertStableEntry(entry);
+                    }
+                }
+                assertEquals(Integer.valueOf(-10000), map.get(-1));
+                assertEquals(1, map.size());
+            }
+        } finally {
+            executor.shutdownNow();
+            assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS));
+        }
+    }
+
+    @Test
+    void hashCallbacksRunOutsideOwnerAndPageMonitors() throws Exception {
+        final TreeBidiMap<CallbackValue, CallbackValue> map = new TreeBidiMap<>();
+        final CallbackValue firstKey = new CallbackValue(1);
+        map.put(firstKey, new CallbackValue(101));
+        map.put(new CallbackValue(2), new CallbackValue(102));
+        final Iterator<Map.Entry<CallbackValue, CallbackValue>> iterator = map.entrySet().iterator();
+        final Map.Entry<CallbackValue, CallbackValue> first = iterator.next();
+        final Map.Entry<CallbackValue, CallbackValue> second = iterator.next();
+        final ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            firstKey.onHash = () -> {
+                assertFalse(Thread.holdsLock(map));
+                try {
+                    assertEquals(Integer.valueOf(2 * 31 ^ 102 * 31),
+                            executor.submit(second::hashCode).get(5, TimeUnit.SECONDS));
+                } catch (final Exception failure) {
+                    throw new AssertionError("An independent entry hash must progress during a hash callback", failure);
+                }
+            };
+            assertEquals(31 ^ 101 * 31, first.hashCode());
+            assertEquals(2 * 31 ^ 102 * 31, second.hashCode());
+        } finally {
+            executor.shutdownNow();
+            assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS));
+        }
+    }
+
+    @Test
+    void reentrantHashCallbacksPreserveLastCompletedComputation() {
+        final TreeBidiMap<CallbackValue, CallbackValue> map = new TreeBidiMap<>();
+        final CallbackValue key = new CallbackValue(1);
+        map.put(key, new CallbackValue(0));
+        final Map.Entry<CallbackValue, CallbackValue> entry = map.entrySet().iterator().next();
+        final int[] calls = {0};
+        key.onHash = () -> {
+            if (calls[0]++ == 0) {
+                key.hash = 7;
+                assertEquals(7, entry.hashCode());
+                key.hash = 11;
+            }
+        };
+        assertEquals(11, entry.hashCode());
+        assertEquals(11, map.entrySet().iterator().next().hashCode());
+        assertEquals(2, calls[0]);
     }
 
     private static Integer put(final TreeMap<Integer, Integer> forward, final TreeMap<Integer, Integer> inverse,

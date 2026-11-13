@@ -626,7 +626,7 @@ public class TreeBidiMap<K extends Comparable<K>, V extends Comparable<V>>
         private final K key;
         private final V value;
         private int hashCodeValue;
-        private boolean calculatedHashCode;
+        private volatile boolean calculatedHashCode;
         private final HashPage hashPage;
         private final int hashOffset;
 
@@ -940,16 +940,24 @@ public class TreeBidiMap<K extends Comparable<K>, V extends Comparable<V>>
 
         private int hash(final int offset, final Object key, final Object value) {
             final int bit = 1 << offset;
-            if ((valid & bit) == 0) {
-                hashes[offset] = key.hashCode() ^ value.hashCode();
-                valid |= bit;
+            synchronized (this) {
+                if ((valid & bit) != 0) {
+                    return hashes[offset];
+                }
             }
-            return hashes[offset];
+            // User callbacks run outside the page monitor, including reentrant callbacks.
+            final int computed = key.hashCode() ^ value.hashCode();
+            synchronized (this) {
+                // A reentrant calculation finishes before this one, as in the original entry.
+                hashes[offset] = computed;
+                valid |= bit;
+                return computed;
+            }
         }
     }
 
     /** Shares a primitive hash cell, never a caller-visible Entry object. */
-    private Node<K, V> exposeEntry(final int slot, final K key, final V value) {
+    private synchronized Node<K, V> exposeEntry(final int slot, final K key, final V value) {
         final HashPage[] pages = entryHashPages == null ? new HashPage[keys.length] : entryHashPages;
         HashPage page = pages[slot];
         if (page == null) {
