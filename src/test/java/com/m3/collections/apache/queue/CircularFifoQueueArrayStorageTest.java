@@ -10,6 +10,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+// Modified 2026 by Hitesh Soliwal and Contributors to the Synexia Project:
+// admit exactly two inherited overrides while retaining all other declaration and resolved API checks.
 package com.m3.collections.apache.queue;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -247,13 +249,52 @@ class CircularFifoQueueArrayStorageTest {
     }
 
     @Test
-    void publicProtectedAndSerializedSurfacesAreUnchanged() throws Exception {
+    void onlyExactInheritedArrayOverridesExtendDeclaredSurface() throws Exception {
         final Class<?> original = oracle.originalClass("queue.CircularFifoQueue");
-        assertEquals(surface(original), surface(CircularFifoQueue.class));
+        final TreeSet<String> expectedDeclarations = surface(original);
+        // Exactly two inherited methods become declarations; all older declarations stay exact.
+        admitInheritedArrayOverride(expectedDeclarations, original);
+        admitInheritedArrayOverride(expectedDeclarations, original, Object[].class);
+        assertEquals(expectedDeclarations, surface(CircularFifoQueue.class));
+    }
+
+    @Test
+    void resolvedPublicProtectedAndSerializedSurfacesAreUnchanged() throws Exception {
+        final Class<?> original = oracle.originalClass("queue.CircularFifoQueue");
+        assertEquals(resolvedSurface(original), resolvedSurface(CircularFifoQueue.class));
         assertEquals(ObjectStreamClass.lookup(original).getSerialVersionUID(),
                 ObjectStreamClass.lookup(CircularFifoQueue.class).getSerialVersionUID());
         assertEquals(Arrays.toString(ObjectStreamClass.lookup(original).getFields()),
                 Arrays.toString(ObjectStreamClass.lookup(CircularFifoQueue.class).getFields()));
+    }
+
+    private static void admitInheritedArrayOverride(final TreeSet<String> declarations,
+            final Class<?> original, final Class<?>... parameters) throws Exception {
+        final java.lang.reflect.Method inherited = original.getMethod("toArray", parameters);
+        final java.lang.reflect.Method declared = CircularFifoQueue.class.getDeclaredMethod("toArray", parameters);
+        assertNotSame(original, inherited.getDeclaringClass(), "the admitted method was originally inherited");
+        final String expected = inherited.toGenericString().replace(
+                inherited.getDeclaringClass().getName() + ".toArray(",
+                CircularFifoQueue.class.getName() + ".toArray(");
+        // This exact string includes access, method generics, return/parameter types and exceptions.
+        assertEquals(expected, declared.toGenericString());
+        assertFalse(declarations.contains(expected), "an inherited override must be a new declaration");
+        declarations.add(expected);
+    }
+
+    private static TreeSet<String> resolvedSurface(final Class<?> type) {
+        final TreeSet<String> result = new TreeSet<>();
+        Arrays.stream(type.getMethods()).forEach(method -> result.add(method.toGenericString().replace(
+                method.getDeclaringClass().getName() + "." + method.getName() + "(",
+                type.getName() + "." + method.getName() + "(")));
+        for (Class<?> owner = type; owner != null; owner = owner.getSuperclass()) {
+            Arrays.stream(owner.getDeclaredMethods())
+                    .filter(method -> Modifier.isProtected(method.getModifiers()))
+                    .forEach(method -> result.add(method.toGenericString().replace(
+                            method.getDeclaringClass().getName() + "." + method.getName() + "(",
+                            type.getName() + "." + method.getName() + "(")));
+        }
+        return result;
     }
 
     private static byte[] serialize(final Object value) throws Exception {
