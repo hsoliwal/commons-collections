@@ -301,13 +301,21 @@ public class TreeList<E> extends AbstractList<E> {
             return -1;
         }
 
+        /**
+         * Export the array-owned AVL entries without recursive stack frames.
+         * Descend to the first live slot once; thereafter use the existing
+         * threaded successor indexes in FIFO/list encounter order.
+         */
         private void toArray(final int slot, final Object[] array, final int index) {
-            array[index] = values[slot];
-            if (leftSubTree(slot) != NONE) {
-                toArray(left[slot], array, index + relativePosition[left[slot]]);
+            int cursor = slot;
+            int position = index;
+            while (leftSubTree(cursor) != NONE) {
+                cursor = left[cursor];
+                position += relativePosition[cursor];
             }
-            if (rightSubTree(slot) != NONE) {
-                toArray(right[slot], array, index + relativePosition[right[slot]]);
+            while (cursor != NONE) {
+                array[position++] = values[cursor];
+                cursor = next(cursor);
             }
         }
 
