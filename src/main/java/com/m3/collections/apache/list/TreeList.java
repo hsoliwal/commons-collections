@@ -18,6 +18,7 @@
 // array slot/index/mask lowering of the existing ranked, threaded AVL algorithm.
 // Modified 2026 by Hitesh Soliwal and Synexia contributors: iterative ranked and extremal slot traversal.
 // Modified 2026 by Hitesh Soliwal and Synexia contributors: nonrecursive threaded indexOf.
+// Modified 2026 by Hitesh Soliwal and Synexia contributors: single-reservation bulk slot growth.
 package com.m3.collections.apache.list;
 
 import java.util.AbstractList;
@@ -94,13 +95,23 @@ public class TreeList<E> extends AbstractList<E> {
         private int free = NONE;
         private int detached = NONE;
 
-        /** Publishes new lanes together, after every allocation succeeds. */
-        private void grow() {
-            final long proposed = Math.max(8L, values.length + (long) (values.length >>> 1));
-            final int capacity = (int) Math.min(Integer.MAX_VALUE - 8L, proposed);
-            if (capacity <= values.length) {
-                throw new OutOfMemoryError("TreeList slot capacity exhausted");
-            }
+        /**
+         * Reserve the remaining build demand at the first exhausted fresh slot.
+         * Advance the original geometric policy without copying intermediate lanes.
+         * Publish all six new lanes together, after every allocation succeeds.
+         */
+        private void grow(final int remaining) {
+            final long required = (long) used + remaining;
+            long proposed = values.length;
+            do {
+                final long next = Math.min(Integer.MAX_VALUE - 8L,
+                        Math.max(8L, proposed + (proposed >>> 1)));
+                if (next <= proposed) {
+                    throw new OutOfMemoryError("TreeList slot capacity exhausted");
+                }
+                proposed = next;
+            } while (proposed < required);
+            final int capacity = (int) proposed;
             final Object[] newValues = Arrays.copyOf(values, capacity);
             final int[] newLeft = Arrays.copyOf(left, capacity);
             final int[] newRight = Arrays.copyOf(right, capacity);
@@ -115,16 +126,16 @@ public class TreeList<E> extends AbstractList<E> {
             state = newState;
         }
 
-        private int freshSlot() {
+        private int freshSlot(final int remaining) {
             if (used == values.length) {
-                grow();
+                grow(remaining);
             }
             return used++;
         }
 
-        private int acquireSlot() {
+        private int acquireSlot(final int remaining) {
             if (free == NONE) {
-                return freshSlot();
+                return freshSlot(remaining);
             }
             final int slot = free;
             free = left[slot];
@@ -132,7 +143,7 @@ public class TreeList<E> extends AbstractList<E> {
         }
 
         private int newLeaf(final int position, final E value, final int next, final int previous) {
-            final int slot = acquireSlot();
+            final int slot = acquireSlot(1);
             relativePosition[slot] = position;
             values[slot] = value;
             left[slot] = previous;
@@ -166,7 +177,9 @@ public class TreeList<E> extends AbstractList<E> {
 
         private int build(final Iterator<? extends E> iterator, final int start, final int end,
                 final int parentPosition, final int previous, final int next, final int[] acquired) {
-            final int slot = acquireSlot();
+            // The existing journal already records the whole build's remaining demand.
+            // Recycled slots are still consumed before any fresh capacity is reserved.
+            final int slot = acquireSlot(acquired.length - 1 - acquired[0]);
             acquired[++acquired[0]] = slot;
             final int mid = start + (end - start) / 2;
             state[slot] = LIVE;
