@@ -137,7 +137,18 @@ public class ArrayStack<E> extends ArrayList<E> {
      * @return The 1-based depth into the stack of the object, or -1 if not found.
      */
     public int search(final Object object) {
-        int i = size() - 1; // Current index
+        // ArrayList.lastIndexOf traverses its backing array without a virtual get
+        // or range check per probe. Only use it for final, side-effect-free
+        // equality types on the exact ArrayStack class: arbitrary equals()
+        // implementations and subclass get(int) overrides remain observable.
+        final int size = size();
+        if (size >= 2048 && getClass() == ArrayStack.class
+                && (object == null || object instanceof String
+                        || object instanceof Integer || object instanceof Long)) {
+            final int index = super.lastIndexOf(object);
+            return index < 0 ? -1 : size - index;
+        }
+        int i = size - 1; // Current index
         int n = 1; // Current distance
         while (i >= 0) {
             final Object current = get(i);
