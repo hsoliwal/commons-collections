@@ -21,7 +21,7 @@ member-by-member loop as fallback. Admit a single bulk-array path only when:
 - Runtime receiver is **exactly** `SetUniqueList.class`, not a subclass.
 - Backing `decorated()` is **exactly** `java.util.ArrayList.class`.
 - Internal membership set and argument are both **exactly** `java.util.HashSet.class`.
-- Backing list has at least 256 entries; argument set has at least 64 entries.
+- Backing list has at least **8,192** entries and argument set at least **1,024** entries, with an additional estimated pair-work gate `(long) size * argumentSize >= 12,000,000`; otherwise preserve the original loop.
 - Every list item and argument item has built-in immutable equality: `null`, exact
   `String`, `Integer`, or `Long`; all other types refuse the fast path.
 - The original list/set identity invariant is checked (same count and every
@@ -44,6 +44,28 @@ The changed method may call one private, nonvirtual predicate for stable equalit
 without adding public methods, fields, serialized members, JNI bindings, or a new
 collection type. Do not change the `SetUniqueList` factory, iterators, `asSet`,
 or the long-established `removeIf`/`retainAll` semantics.
+
+## Threshold correction from actual Java 21 benchmarks
+
+The initial conservative-looking `256/64` size gate proved **too broad**.
+A real JDK21 `HashSet`/`ArrayList` standalone method-level benchmark showed
+a significant regression at `n=512,k=128` (25,848 ns per original removal
+vs 132,025 ns for bulk), at `n=2,048,k=512` (236,932 vs 493,863 ns),
+and even at `n=8,192,k=1,024` in one sample (1,147,828 vs 1,303,158 ns).
+The one-time HashSet-based backing-invariant preflight is not free.
+
+Larger workloads reversed the result: at `n=8,192,k=2,048`, 3,320,604
+vs 219,444 ns; `n=16,384,k=1,024`, 1,534,961 vs 190,152 ns; and
+`n=16,384,k=2,048`, 4,300,023 vs 209,861 ns.
+These timings are exploratory `-Xbatch` medians and are subject to JIT/GC
+noise; they justify **narrowing admission**, not asserting global speedups.
+
+The reviewed fast path therefore requires `size >= 8192`,
+`coll.size() >= 1024`, and a 64-bit work product of at least 12 million.
+This excludes every observed smaller regression, while allowing only
+benchmarked substantial bulk-removal work. No threshold is represented as a
+universal performance oracle; JMH/CI and original JUnit qualification remain
+required before M3JDK integration.
 
 ## Required evidence and promotion
 
