@@ -236,13 +236,22 @@ public class TreeList<E> extends AbstractList<E> {
             return (E) values[slot];
         }
 
+        /** Iterative ranked descent; each relative rank is rebased at the child slot. */
         private int get(final int slot, final int index) {
-            final int relative = index - relativePosition[slot];
-            if (relative == 0) {
-                return slot;
+            int currentSlot = slot;
+            int currentIndex = index;
+            for (;;) {
+                final int relative = currentIndex - relativePosition[currentSlot];
+                if (relative == 0) {
+                    return currentSlot;
+                }
+                final int next = relative < 0 ? leftSubTree(currentSlot) : rightSubTree(currentSlot);
+                if (next == NONE) {
+                    return NONE;
+                }
+                currentSlot = next;
+                currentIndex = relative;
             }
-            final int next = relative < 0 ? leftSubTree(slot) : rightSubTree(slot);
-            return next == NONE ? NONE : get(next, relative);
         }
 
         private int min(final int slot) {
