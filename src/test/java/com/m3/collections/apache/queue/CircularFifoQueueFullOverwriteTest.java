@@ -228,7 +228,8 @@ public final class CircularFifoQueueFullOverwriteTest {
             check(Arrays.equals(queue.toArray(), restored.toArray()), "serialized FIFO values");
             Value extra = new Value(12345);
             restored.add(extra);
-            check(restored.peek().equals(queue.get(1 % capacity)), "post-read full overwrite");
+            Value expectedOldest = capacity == 1 ? extra : queue.get(1);
+            check(restored.peek().equals(expectedOldest), "post-read full overwrite");
             check(restored.get(restored.size() - 1) == extra, "post-read append identity");
         }
     }
