@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: Apache-2.0
+name: Commons Collections source-array superset (Java 8 API / JDK 21 tests)
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m3-commons-array-superset-20261113.yml'
+      - 'src/main/java/com/m3/collections/apache/bloomfilter/**'
+      - 'src/main/java/com/m3/collections/apache/list/TreeList.java'
+      - 'src/main/java/com/m3/collections/apache/queue/CircularFifoQueue.java'
+      - 'src/test/java/com/m3/collections/apache/bloomfilter/**'
+      - 'src/test/java/com/m3/collections/apache/list/TreeListThreadedIndexLookupTest.java'
+      - 'src/test/java/com/m3/collections/apache/list/TreeListTypedArray*.java'
+      - 'src/test/java/com/m3/collections/apache/queue/CircularFifoQueueFullOverwriteTest.java'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  existing-array-owners:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Confirm original Commons Java 8 source floor
+        run: |
+          java -version
+          mvn -B -ntp -DskipTests compile
+      - name: Require all native fork array-owner JUnit classes
+        run: |
+          mvn -B -ntp -Dtest=TreeListThreadedIndexLookupTest,TreeListTypedArrayTest,CircularFifoQueueFullOverwriteTest,ArrayCountingBloomFilterMaskTest,ArrayCountingBloomFilterMaskExportTest,BitmapHotPathTest test
+      - name: Provider source and API metadata validation
+        run: |
+          git diff --check ${{ github.event.pull_request.base.sha }}..HEAD
+          test -f target/surefire-reports/TEST-com.m3.collections.apache.bloomfilter.ArrayCountingBloomFilterMaskExportTest.xml
+          test -f target/surefire-reports/TEST-com.m3.collections.apache.list.TreeListTypedArrayTest.xml
