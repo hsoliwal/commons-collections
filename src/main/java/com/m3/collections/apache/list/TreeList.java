@@ -91,15 +91,25 @@ public class TreeList<E> extends AbstractList<E> {
         private byte[] state = EMPTY_BYTES;
         private int used;
         private int free = NONE;
+        private int freeCount;
         private int detached = NONE;
 
         /** Publishes new lanes together, after every allocation succeeds. */
-        private void grow() {
-            final long proposed = Math.max(8L, values.length + (long) (values.length >>> 1));
-            final int capacity = (int) Math.min(Integer.MAX_VALUE - 8L, proposed);
-            if (capacity <= values.length) {
+        private void ensureCapacity(final long required) {
+            if (required <= values.length) {
+                return;
+            }
+            final long maximum = Integer.MAX_VALUE - 8L;
+            if (required > maximum) {
                 throw new OutOfMemoryError("TreeList slot capacity exhausted");
             }
+            // Keep the existing geometric endpoint without allocating the
+            // intermediate six-lane generations during a sized bulk build.
+            long next = values.length;
+            do {
+                next = Math.min(maximum, Math.max(8L, next + (next >>> 1)));
+            } while (next < required);
+            final int capacity = (int) next;
             final Object[] newValues = Arrays.copyOf(values, capacity);
             final int[] newLeft = Arrays.copyOf(left, capacity);
             final int[] newRight = Arrays.copyOf(right, capacity);
@@ -116,7 +126,7 @@ public class TreeList<E> extends AbstractList<E> {
 
         private int freshSlot() {
             if (used == values.length) {
-                grow();
+                ensureCapacity((long) used + 1L);
             }
             return used++;
         }
@@ -127,6 +137,7 @@ public class TreeList<E> extends AbstractList<E> {
             }
             final int slot = free;
             free = left[slot];
+            freeCount--;
             return slot;
         }
 
@@ -151,6 +162,9 @@ public class TreeList<E> extends AbstractList<E> {
             }
             // Cell zero is the initialized prefix length; remaining cells are slot IDs.
             final int[] acquired = new int[(int) journalLength];
+            // Reused slots do not raise the high-water mark. Reserve before
+            // acquiring any slot; iterator callbacks and rollback stay unchanged.
+            ensureCapacity((long) used + Math.max(0L, journalLength - 1L - freeCount));
             try {
                 return build(iterator, 0, end, 0, NONE, NONE, acquired);
             } catch (final RuntimeException | Error failure) {
@@ -473,6 +487,7 @@ public class TreeList<E> extends AbstractList<E> {
             right[slot] = NONE;
             left[slot] = free;
             free = slot;
+            freeCount++;
         }
 
         private void releaseDetached() {
@@ -561,6 +576,7 @@ public class TreeList<E> extends AbstractList<E> {
             state = EMPTY_BYTES;
             used = 0;
             free = NONE;
+            freeCount = 0;
             detached = NONE;
         }
     }
