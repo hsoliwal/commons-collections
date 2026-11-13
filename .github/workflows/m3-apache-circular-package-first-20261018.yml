@@ -74,17 +74,15 @@ jobs:
               target,before_hash,after_hash=line.split('\t')
               # Preserve the 2026-10-19 receipt as historical evidence.
               # Later exact-owner optimizations supersede only these two current
-              # postimages. Validate their new Git blob seals separately.
-              current_blobs = {
+              # postimages. Validate their new per-file SHA-256 seals separately.
+              current_sha256 = {
                   'src/main/java/com/m3/collections/apache/queue/CircularFifoQueue.java':
-                      '4ea29f98cf9083849a8eb26147559c9e9f680523',
+                      '3dc7770e623c712045a4d48d243c3266ce068aeac016cfe11a9d82f70e706318',
                   'src/test/java/com/m3/collections/apache/queue/CircularFifoQueueArrayStorageTest.java':
-                      '7ff10eb9c742ae81e72539926d26eda317505f92',
+                      '1c77dab31f8274abb5aa66cbf31f39d36daa0f1b609a36461094c8713397fc9c',
               }
-              if target in current_blobs:
-                  actual_blob = subprocess.check_output(
-                      ['git', 'hash-object', target], text=True).strip()
-                  assert actual_blob == current_blobs[target],target
+              if target in current_sha256:
+                  assert hashlib.sha256(Path(target).read_bytes()).hexdigest() == current_sha256[target],target
               else:
                   assert hashlib.sha256(Path(target).read_bytes()).hexdigest()==after_hash,target
               if before_hash != 'ABSENT':
@@ -118,5 +116,5 @@ jobs:
         run: |
           mvn -B -ntp -Drat.skip=true -Dmaven.compiler.testRelease=21 -DforkCount=1 -DreuseForks=true \
             -DargLine=-Xmx768m \
-            -Dtest=IteratorChainTest,IteratorChainArrayStorageTest,PermutationIteratorTest,PermutationIteratorArrayStorageTest,CircularFifoQueueTest,CircularFifoQueueArrayStorageTest \
+            -Dtest=IteratorChainTest,IteratorChainArrayStorageTest,PermutationIteratorTest,PermutationIteratorArrayStorageTest,CircularFifoQueueTest,CircularFifoQueueArrayStorageTest,CircularFifoQueueContainsHotPathTest,CircularFifoQueueRemoveHotPathTest \
             test
