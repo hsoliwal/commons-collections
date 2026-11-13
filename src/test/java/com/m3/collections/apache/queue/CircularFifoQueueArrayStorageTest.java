@@ -295,18 +295,22 @@ class CircularFifoQueueArrayStorageTest {
 
     /**
      * Preserve every old declaration and allow only exact implementations of the
-     * two operations that the frozen preimage already inherits from AbstractCollection.
+     * four operations that the frozen preimage already inherits from AbstractCollection.
      * The declarations remain optional so this gate also accepts the unchanged baseline.
      */
     private static TreeSet<String> declaredSurfaceWithExactArrayOverrides(final Class<?> original,
             final Class<?> current) throws Exception {
         final TreeSet<String> result = surface(current);
-        for (final Class<?>[] parameters : new Class<?>[][] {new Class<?>[0], {Object[].class}}) {
-            final Method inherited = original.getMethod("toArray", parameters);
+        final String[] names = {"toArray", "toArray", "contains", "remove"};
+        final Class<?>[][] signatures = {new Class<?>[0], {Object[].class}, {Object.class}, {Object.class}};
+        for (int index = 0; index < names.length; index++) {
+            final String name = names[index];
+            final Class<?>[] parameters = signatures[index];
+            final Method inherited = original.getMethod(name, parameters);
             assertEquals(AbstractCollection.class, inherited.getDeclaringClass(), "frozen inherited owner");
             final Method implementation;
             try {
-                implementation = current.getDeclaredMethod("toArray", parameters);
+                implementation = current.getDeclaredMethod(name, parameters);
             } catch (final NoSuchMethodException stillInherited) {
                 continue;
             }
