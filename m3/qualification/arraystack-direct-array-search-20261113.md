@@ -15,6 +15,14 @@ This intentionally does **not** generalize to arbitrary objects: an adversarial 
 
 Public signature, package `com.m3.collections.apache`, serialization UID, null behavior, one-based depth, duplicate-last-match precedence, exception behavior, and all external contracts remain locked. No reflection, type widening, native/JNI code, class relocation or new memory storage is introduced.
 
+## Measured threshold selection (exploratory, non-JMH)
+
+The candidate is gated to `size() >= 2048` to avoid routing small stacks through a new dispatch path. The original `size()` is still read once and reused by the fallback; the existing virtual `get(int)` loop is untouched. Only exact-runtime `ArrayStack` with side-effect-free query equality uses `super.lastIndexOf`.
+
+Local OpenJDK 21.0.12.1, 5 timed samples after two warmup batches, 8 million approximate element probes per sample, same benchmark class and process arguments for both variants; `java -XX:-TieredCompilation -Xbatch`, separate JVMs (not JMH). Three independent sample runs of a deep 4096-element miss yielded median **baseline 5,048.4 ns/search** and median **candidate 4,224.5 ns/search**, approximately **16.3% lower observed search latency**. At 1,024 elements, both variants retain the original traversal; their observed medians were **1,305.2 vs 1,277.2 ns/search** across runs (within ordinary noise). The isolated single-run tiered JVM result for a 4,096-element miss was **5,040.7 vs 3,995.7 ns/search**. Benchmarks are exploratory and machine-specific, not evidence of a universal improvement or full fork performance qualification.
+
+Reproducible standalone benchmark source and raw logs are retained in the execution proof archive, and the opt-in fork qualification file `m3/qualification/arraystack-direct-array-search-20261113/ArrayStackSearchBenchmark.java` contains the identical microbenchmark. Production correctness, not microbenchmark timing, is the hard admission prerequisite.
+
 ## Expected patch and proof
 
 The production diff changes only the body of `ArrayStack.search(Object)`; all other production source lines remain identical. Do not change `ArrayList` or public API and do not overlap existing TreeList, queue, Bloom filter, or Eclipse/Guava PR owners.
