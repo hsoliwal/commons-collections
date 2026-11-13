@@ -5,6 +5,7 @@ on:
     paths:
       - 'src/main/java/com/m3/collections/apache/queue/CircularFifoQueue.java'
       - 'src/test/java/com/m3/collections/apache/queue/M3CircularFifoQueueIndexTest.java'
+      - 'src/test/java/com/m3/collections/apache/queue/CircularFifoQueueContainsHotPathTest.java'
       - '.github/workflows/m3-arrayification-ring-20261101.yml'
   workflow_dispatch:
 permissions:
@@ -25,21 +26,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          printf 'c0aa469f19aad77631e5949221b9eec70fa4da5707ec6c964553c7a46ffb21b1  %s\n' 'src/main/java/com/m3/collections/apache/queue/CircularFifoQueue.java' | sha256sum -c -
+          printf '4dc276e9b16076a45a59c5de01cb0cb3234f18b81e464836a0416aa7bfacc8fe  %s\n' 'src/main/java/com/m3/collections/apache/queue/CircularFifoQueue.java' | sha256sum -c -
           printf '9da28e29eb0b3ff45859192c1fb65c2257847a148b84d8710b1d32e5ef916016  %s\n' 'src/test/java/com/m3/collections/apache/queue/M3CircularFifoQueueIndexTest.java' | sha256sum -c -
       - name: Execute actual scoped Commons JUnit test
         shell: bash
         run: |
           set -euo pipefail
-          mvn -B -ntp -Dtest=M3CircularFifoQueueIndexTest test
+          mvn -B -ntp -Dtest=M3CircularFifoQueueIndexTest,CircularFifoQueueContainsHotPathTest test
       - name: Require real JUnit, no failures or skips
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import xml.etree.ElementTree as ET
-          files=list(Path('target/surefire-reports').glob('TEST-*M3CircularFifoQueueIndexTest*.xml'))
-          assert files,'NO_REAL_JUNIT_REPORT'
+          files=[]
+          for name in ('M3CircularFifoQueueIndexTest', 'CircularFifoQueueContainsHotPathTest'):
+              matching=list(Path('target/surefire-reports').glob('TEST-*'+name+'*.xml'))
+              assert matching,'NO_REAL_JUNIT_REPORT_'+name
+              files.extend(matching)
           a=[0,0,0,0]
           for f in files:
               e=ET.parse(f).getroot()
