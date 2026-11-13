@@ -22,6 +22,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -36,6 +37,6 @@ jobs:
           mvn -B -ntp -Dtest=TreeListThreadedIndexLookupTest,TreeListTypedArrayTest,CircularFifoQueueFullOverwriteTest,ArrayCountingBloomFilterMaskTest,ArrayCountingBloomFilterMaskExportTest,BitmapHotPathTest test
       - name: Provider source and API metadata validation
         run: |
-          git diff --check ${{ github.event.pull_request.base.sha }}..HEAD
+          git diff --check "$(git merge-base HEAD origin/master)" HEAD
           test -f target/surefire-reports/TEST-com.m3.collections.apache.bloomfilter.ArrayCountingBloomFilterMaskExportTest.xml
           test -f target/surefire-reports/TEST-com.m3.collections.apache.list.TreeListTypedArrayTest.xml
