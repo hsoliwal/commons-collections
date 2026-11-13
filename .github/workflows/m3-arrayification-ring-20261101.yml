@@ -6,6 +6,7 @@ on:
       - 'src/main/java/com/m3/collections/apache/queue/CircularFifoQueue.java'
       - 'src/test/java/com/m3/collections/apache/queue/M3CircularFifoQueueIndexTest.java'
       - 'src/test/java/com/m3/collections/apache/queue/CircularFifoQueueContainsHotPathTest.java'
+      - 'src/test/java/com/m3/collections/apache/queue/CircularFifoQueueRemoveHotPathTest.java'
       - '.github/workflows/m3-arrayification-ring-20261101.yml'
   workflow_dispatch:
 permissions:
@@ -26,13 +27,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          printf '4dc276e9b16076a45a59c5de01cb0cb3234f18b81e464836a0416aa7bfacc8fe  %s\n' 'src/main/java/com/m3/collections/apache/queue/CircularFifoQueue.java' | sha256sum -c -
+          printf '3dc7770e623c712045a4d48d243c3266ce068aeac016cfe11a9d82f70e706318  %s\n' 'src/main/java/com/m3/collections/apache/queue/CircularFifoQueue.java' | sha256sum -c -
           printf '9da28e29eb0b3ff45859192c1fb65c2257847a148b84d8710b1d32e5ef916016  %s\n' 'src/test/java/com/m3/collections/apache/queue/M3CircularFifoQueueIndexTest.java' | sha256sum -c -
       - name: Execute actual scoped Commons JUnit test
         shell: bash
         run: |
           set -euo pipefail
-          mvn -B -ntp -Dtest=M3CircularFifoQueueIndexTest,CircularFifoQueueContainsHotPathTest test
+          mvn -B -ntp -Dtest=M3CircularFifoQueueIndexTest,CircularFifoQueueContainsHotPathTest,CircularFifoQueueRemoveHotPathTest test
       - name: Require real JUnit, no failures or skips
         shell: bash
         run: |
@@ -40,7 +41,7 @@ jobs:
           from pathlib import Path
           import xml.etree.ElementTree as ET
           files=[]
-          for name in ('M3CircularFifoQueueIndexTest', 'CircularFifoQueueContainsHotPathTest'):
+          for name in ('M3CircularFifoQueueIndexTest', 'CircularFifoQueueContainsHotPathTest', 'CircularFifoQueueRemoveHotPathTest'):
               matching=list(Path('target/surefire-reports').glob('TEST-*'+name+'*.xml'))
               assert matching,'NO_REAL_JUNIT_REPORT_'+name
               files.extend(matching)
