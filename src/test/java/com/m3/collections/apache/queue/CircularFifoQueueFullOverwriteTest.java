@@ -31,8 +31,23 @@ public final class CircularFifoQueueFullOverwriteTest {
     private static final Field FULL = field("full");
     private static int checks;
 
-    private record Value(int key) implements java.io.Serializable {
+    private static final class Value implements java.io.Serializable {
         private static final long serialVersionUID = 1L;
+        private final int key;
+
+        Value(int key) {
+            this.key = key;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof Value && key == ((Value) other).key;
+        }
+
+        @Override
+        public int hashCode() {
+            return Integer.hashCode(key);
+        }
     }
 
     private static Field field(String name) {
@@ -125,41 +140,48 @@ public final class CircularFifoQueueFullOverwriteTest {
             Geometry model = new Geometry(capacity);
             for (int i = 0; i < 7000; i++) {
                 switch (random.nextInt(9)) {
-                    case 0, 1, 2, 3, 4, 5 -> {
+                    case 0:
+                    case 1:
+                    case 2:
+                    case 3:
+                    case 4:
+                    case 5: {
                         Value value = new Value(i + capacity * 10000);
                         check(queue.add(value), "add accepted");
                         if (order.size() == capacity) order.removeFirst();
                         order.addLast(value);
                         model.add(value);
+                        break;
                     }
-                    case 6 -> {
+                    case 6: {
                         Value observed = queue.poll();
                         Value expected = order.pollFirst();
                         check(observed == expected, "poll identity");
                         check(model.poll() == expected, "model poll identity");
+                        break;
                     }
-                    case 7 -> {
+                    case 7:
                         queue.clear();
                         order.clear();
                         model.clear();
-                    }
-                    case 8 -> {
+                        break;
+                    case 8: {
                         Value value = new Value(-i);
                         if (random.nextBoolean()) {
                             check(queue.offer(value), "offer accepted");
                             if (order.size() == capacity) order.removeFirst();
                             order.addLast(value);
                             model.add(value);
+                        } else if (order.isEmpty()) {
+                            assertThrows(NoSuchElementException.class, queue::remove);
                         } else {
-                            if (order.isEmpty()) {
-                                assertThrows(NoSuchElementException.class, queue::remove);
-                            } else {
-                                check(queue.remove() == order.removeFirst(), "remove identity");
-                                model.poll();
-                            }
+                            check(queue.remove() == order.removeFirst(), "remove identity");
+                            model.poll();
                         }
+                        break;
                     }
-                    default -> throw new AssertionError();
+                    default:
+                        throw new AssertionError();
                 }
                 if (i % 97 == 0) {
                     Object[] snapshot = queue.toArray();
