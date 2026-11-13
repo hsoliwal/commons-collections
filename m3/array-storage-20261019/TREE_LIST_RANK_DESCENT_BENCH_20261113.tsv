@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+# Five independent OpenJDK21.0.12.1 processes, each 11 alternating warmed samples on 131071-slot balanced ranked/threaded tree; 196608 random get calls per sample; no JMH and not the full fork class.
+process	oracle_checks	old_median_ns	candidate_median_ns	ratio	decision
+1	412206	44512024	41557807	0.9336	SAMPLED_IMPROVEMENT
+2	412206	45487081	41945070	0.9221	SAMPLED_IMPROVEMENT
+3	412206	46740715	42989146	0.9197	SAMPLED_IMPROVEMENT
+4	412206	46411808	43713146	0.9419	SAMPLED_IMPROVEMENT
+5	412206	45698160	42868331	0.9381	SAMPLED_IMPROVEMENT
