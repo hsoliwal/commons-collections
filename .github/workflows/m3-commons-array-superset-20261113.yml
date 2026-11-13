@@ -5,9 +5,17 @@ on:
     paths:
       - '.github/workflows/m3-commons-array-superset-20261113.yml'
       - 'src/main/java/com/m3/collections/apache/bloomfilter/**'
+      - 'src/main/java/com/m3/collections/apache/ArrayStack.java'
+      - 'src/main/java/com/m3/collections/apache/bag/AbstractMapBag.java'
+      - 'src/main/java/com/m3/collections/apache/multimap/AbstractMultiValuedMap.java'
+      - 'src/main/java/com/m3/collections/apache/multiset/AbstractMapMultiSet.java'
       - 'src/main/java/com/m3/collections/apache/list/TreeList.java'
       - 'src/main/java/com/m3/collections/apache/queue/CircularFifoQueue.java'
       - 'src/test/java/com/m3/collections/apache/bloomfilter/**'
+      - 'src/test/java/com/m3/collections/apache/ArrayStackDirectSearchTest.java'
+      - 'src/test/java/com/m3/collections/apache/bag/MapBagSpanArrayExportTest.java'
+      - 'src/test/java/com/m3/collections/apache/multimap/ArrayListValuedHashMapEntryCursorTest.java'
+      - 'src/test/java/com/m3/collections/apache/multiset/MapMultiSetSpanArrayExportTest.java'
       - 'src/test/java/com/m3/collections/apache/list/TreeListThreadedIndexLookupTest.java'
       - 'src/test/java/com/m3/collections/apache/list/TreeListTypedArray*.java'
       - 'src/test/java/com/m3/collections/apache/queue/CircularFifoQueueFullOverwriteTest.java'
@@ -34,7 +42,7 @@ jobs:
           mvn -B -ntp -DskipTests compile
       - name: Require all native fork array-owner JUnit classes
         run: |
-          mvn -B -ntp -Dtest=TreeListThreadedIndexLookupTest,TreeListTypedArrayTest,CircularFifoQueueFullOverwriteTest,ArrayCountingBloomFilterMaskTest,ArrayCountingBloomFilterMaskExportTest,BitmapHotPathTest test
+          mvn -B -ntp -Dtest=TreeListThreadedIndexLookupTest,TreeListTypedArrayTest,CircularFifoQueueFullOverwriteTest,CircularFifoQueueContainsHotPathTest,CircularFifoQueueRemoveHotPathTest,ArrayCountingBloomFilterMaskTest,ArrayCountingBloomFilterMaskExportTest,BitmapHotPathTest,MapBagSpanArrayExportTest,MapMultiSetSpanArrayExportTest,ArrayListValuedHashMapEntryCursorTest,ArrayStackDirectSearchTest test
       - name: Provider source and API metadata validation
         run: |
           git diff --check "$(git merge-base HEAD origin/master)" HEAD
