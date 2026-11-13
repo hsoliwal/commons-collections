@@ -44,6 +44,11 @@ mvn -B -ntp -Drat.skip=true -Dmaven.compiler.release=8 \
   require newer APIs). **78 JUnit tests passed**, 0 failures/errors/skips.
 - Tests include 256 deterministic reference-vs-candidate scenarios, empty and
   duplicate iterators, mutable child removal, and 4,096 child slots.
+- Full project suite, with the complete Java 21 compiler path available to
+  source-oracle tests and JaCoCo instrumentation disabled for exact-field
+  reflection tests: **22,333 tests, 0 failures, 0 errors, 82 skipped**;
+  `mvn -o -B -ntp -Drat.skip=true -Djacoco.skip=true`
+  `-Dmaven.compiler.release=8 -Dmaven.compiler.testRelease=21 test`.
 - Wall-clock speedup and all possible downstream binary-compatibility effects
   have not been benchmarked or certified; no M3JDK promotion is claimed.
 
