@@ -389,7 +389,8 @@ public class SetUniqueList<E> extends AbstractSerializableListDecorator<E> {
                 && decorated().getClass() == ArrayList.class
                 && set.getClass() == HashSet.class
                 && coll.getClass() == HashSet.class
-                && size() >= 256 && coll.size() >= 64) {
+                && size() >= 8192 && coll.size() >= 1024
+                && (long) size() * coll.size() >= 12_000_000L) {
             final List<E> list = decorated();
             if (set.size() == list.size()) {
                 // A caller can still mutate the externally supplied backing
