@@ -40,7 +40,6 @@ import com.m3.collections.apache.iterators.AbstractIteratorDecorator;
 import com.m3.collections.apache.iterators.EmptyMapIterator;
 import com.m3.collections.apache.iterators.IteratorChain;
 import com.m3.collections.apache.iterators.LazyIteratorChain;
-import com.m3.collections.apache.iterators.TransformIterator;
 import com.m3.collections.apache.keyvalue.AbstractMapEntry;
 import com.m3.collections.apache.keyvalue.UnmodifiableMapEntry;
 import com.m3.collections.apache.multiset.AbstractMultiSet;
