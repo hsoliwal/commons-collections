@@ -16,6 +16,7 @@
  */
 // Modified 2026 by Hitesh Soliwal and Contributors to the Synexia Project:
 // array slot/index/mask lowering of the existing ranked, threaded AVL algorithm.
+// Modified 2026 by Hitesh Soliwal and Synexia contributors: iterative ranked and extremal slot traversal.
 package com.m3.collections.apache.list;
 
 import java.util.AbstractList;
@@ -237,20 +238,36 @@ public class TreeList<E> extends AbstractList<E> {
         }
 
         private int get(final int slot, final int index) {
-            final int relative = index - relativePosition[slot];
-            if (relative == 0) {
-                return slot;
+            int current = slot;
+            int position = index;
+            for (;;) {
+                final int relative = position - relativePosition[current];
+                if (relative == 0) {
+                    return current;
+                }
+                final int next = relative < 0 ? leftSubTree(current) : rightSubTree(current);
+                if (next == NONE) {
+                    return NONE;
+                }
+                current = next;
+                position = relative;
             }
-            final int next = relative < 0 ? leftSubTree(slot) : rightSubTree(slot);
-            return next == NONE ? NONE : get(next, relative);
         }
 
         private int min(final int slot) {
-            return leftSubTree(slot) == NONE ? slot : min(left[slot]);
+            int current = slot;
+            while (leftSubTree(current) != NONE) {
+                current = left[current];
+            }
+            return current;
         }
 
         private int max(final int slot) {
-            return rightSubTree(slot) == NONE ? slot : max(right[slot]);
+            int current = slot;
+            while (rightSubTree(current) != NONE) {
+                current = right[current];
+            }
+            return current;
         }
 
         private int next(final int slot) {
