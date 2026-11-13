@@ -1,0 +1,111 @@
+{
+  "schema": "SYNEXIA_COLLECTION_FORK_QUALIFICATION_V1",
+  "SPDX-License-Identifier": "Apache-2.0",
+  "SPDX-FileCopyrightText": "2026 Hitesh Soliwal and Contributors to the Synexia Project",
+  "kind": "passive executed-output receipt; no recipe implementation",
+  "target_repository": "hsoliwal/commons-collections",
+  "target_preimage": "1c3d291123d3e991e982005c6bc1ee91dc682fad",
+  "canonical_repository": "hsoliwal/com.synexia",
+  "canonical_commit": "533471d06370c6d5aff552e8bb8196762e3d8753",
+  "canonical_source_pin": "b3e975ae0749db17aa700c6cf2ff90155cb0553b",
+  "dataset": "synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/datasets/m3-commons-bidi-arrays-20261113",
+  "qualification": "synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/evidence/commons-bidi-arrays-20261113",
+  "recipe": "com.synexia.m3jdk.CollectionsContractRefinement20261017",
+  "engine": "com.synexia.rewrite.M3HashPinnedJavaSnapshotRecipe",
+  "receipt_dataset": "synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/datasets/commons-bidi-receipt-20261113",
+  "source_sdk_manifests": [
+    {
+      "path": "synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/evidence/commons-bidi-arrays-20261113/sdk/SDK_INPUTS.tsv",
+      "sha256": "7a09b7fca47c0c5b8c0490c918807e64360db8f658bdd58e113ee3edf6996374"
+    },
+    {
+      "path": "synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/evidence/commons-bidi-arrays-20261113/sdk/SDK_RESULTS.tsv",
+      "sha256": "bab2a78e548a5fd803b71c87d17a2ffcc0bb3bfc7af212cab1f65800dd93af58"
+    }
+  ],
+  "outputs": [
+    {
+      "path": "src/main/java/com/m3/collections/apache/bidimap/TreeBidiMap.java",
+      "preimage_sha256": "cad9de00b32dbc29f76d51ea357b58f75c437e12e7d6bab808ac7e35f100adb5",
+      "sha256": "66b721cd001f69087a2f6f9ea6a181f9c2a8f473febfee7ff14aacb7dd9d7b1b",
+      "git_blob": "727f3ff4a7552c2276b566c6648959fc87fd2cbe"
+    },
+    {
+      "path": "src/test/java/com/m3/collections/apache/bidimap/TreeBidiMapArrayStorageTest.java",
+      "preimage_sha256": "ABSENT",
+      "sha256": "32b2aa662b76bcdcfd9510c2f45a75c0e4ea1f47f19f07bcf73eeba7486f91e1",
+      "git_blob": "fcc29d73367408cb3e7121fd0d2942ccdb021d9b"
+    }
+  ],
+  "change": "TreeBidiMap stores its existing dual red-black indexes in parent-owned payload/link/color arrays and recycled integer slots; fresh immutable caller entries use bounded primitive hash pages.",
+  "compatibility": {
+    "public_protected_declarations": "preserved",
+    "serialized_uid_fields_and_stream_bytes": "preserved in qualified fixtures",
+    "representative_identity_and_lazy_entry_hash": "preserved",
+    "entry_identity_delta": "Forward entry requests now create fresh caller-owned projections instead of returning the same retained Node object.",
+    "map_hash_code": "Original uncached direct key/value hashing preserved; distinct from the shared lazy entry hash cache.",
+    "java_source_target": 8,
+    "qualification_runtime": 21,
+    "java8_runtime_execution": "not performed",
+    "legacy_backward_removal_iterator_behavior": "Observed exception/state tape preserved; existing logical-size defect not repaired."
+  },
+  "executed_source_checks": {
+    "junit": 45,
+    "python_prepare": 23,
+    "receiver_scenarios": 9,
+    "actual_applied_outputs": 2,
+    "fixed_point_changes": 0,
+    "baseline_full": {
+      "tests": 22327,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 82
+    },
+    "candidate_full_initial_test_epoch": {
+      "tests": 22335,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 82,
+      "production_sha256": "66b721cd001f69087a2f6f9ea6a181f9c2a8f473febfee7ff14aacb7dd9d7b1b",
+      "test_sha256": "b97ecd18c5711fd175c5db3c3285e6dd74ea82f7787c0526b667c6aa7421963a"
+    },
+    "final_sdk_received_owning": {
+      "tests": 259,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1
+    },
+    "actual_owner_differential_checks": 1007566,
+    "received_production_classfiles_identical": 16,
+    "target_checkstyle_violations": 0
+  },
+  "measurement": {
+    "method": "Standalone actual-class diagnostics; six JVMs, three paired comparisons, 450 raw samples and 450 validated checksums; not JMH.",
+    "structural_bytes_definition": "Reachable structural bytes excluding key/value payloads; shared empty arrays are not exclusive per-map retained bytes.",
+    "mappings": 65536,
+    "before_entry_traversal": {
+      "baseline_bytes": 9437248,
+      "candidate_bytes": 2347824
+    },
+    "after_complete_entry_traversal": {
+      "baseline_bytes": 9437272,
+      "candidate_bytes": 3287776
+    },
+    "tradeoffs": "Empty/singleton overhead and escaping-entry traversal allocation increase. CPU results are mixed by workload: larger build/get/recycle/MapIterator improve; smaller lookup and escaping-entry traversal regress. Full raw results and adverse outcomes remain in the canonical qualification."
+  },
+  "original_default_lifecycle": {
+    "baseline": "FAIL",
+    "candidate": "FAIL",
+    "cause": "same three historical RAT unapproved receipts",
+    "files": [
+      "m3scale/qualifications/m3-commons-predicated-bulk-capture-20261018/CATALOGUE.tsv",
+      "m3scale/qualifications/m3-commons-predicated-bulk-capture-20261018/README.md",
+      "m3scale/qualifications/m3-commons-predicated-bulk-capture-20261018/manifest.tsv"
+    ],
+    "rat_skip": false,
+    "rule_exclusions_added": false,
+    "manifest_verifier_supports_comments": false
+  },
+  "disposition": "Measured storage candidate; draft while the original default Maven lifecycle remains blocked by the same three historical RAT files in both baseline and candidate.",
+  "whole_reactor_or_m3jdk_acceptance": false
+}
