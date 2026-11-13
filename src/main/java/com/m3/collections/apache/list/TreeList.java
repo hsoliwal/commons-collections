@@ -17,6 +17,7 @@
 // Modified 2026 by Hitesh Soliwal and Contributors to the Synexia Project:
 // array slot/index/mask lowering of the existing ranked, threaded AVL algorithm.
 // Modified 2026 by Hitesh Soliwal and Synexia contributors: iterative ranked and extremal slot traversal.
+// Modified 2026-11-13 by Hitesh Soliwal and contributors: bounded bulk rollback storage.
 package com.m3.collections.apache.list;
 
 import java.util.AbstractList;
@@ -152,39 +153,49 @@ public class TreeList<E> extends AbstractList<E> {
             return slot;
         }
 
-        /** Reuse slots while journaling this build's ownership for failure cleanup. */
+        /** Builds with bounded rollback storage, reusing its own child links. */
         private int build(final Collection<? extends E> source) {
             final Iterator<? extends E> iterator = source.iterator();
             final int end = source.size() - 1;
-            final long journalLength = Math.max(1L, end + 1L) + 1L;
-            if (journalLength > Integer.MAX_VALUE - 8L) {
+            // Retain the existing size refusal and input callback order.
+            final long buildLength = Math.max(1L, end + 1L) + 1L;
+            if (buildLength > Integer.MAX_VALUE - 8L) {
                 throw new OutOfMemoryError("TreeList build capacity exhausted");
             }
-            // Cell zero is the initialized prefix length; remaining cells are slot IDs.
-            final int[] acquired = new int[(int) journalLength];
-            // Reused slots do not raise the high-water mark. Reserve before
-            // acquiring any slot; iterator callbacks and rollback stay unchanged.
-            ensureCapacity((long) used + Math.max(0L, journalLength - 1L - freeCount));
-            try {
-                return build(iterator, 0, end, 0, NONE, NONE, acquired);
-            } catch (final RuntimeException | Error failure) {
-                // Only this uncommitted subtree is released. Reversing acquisition
-                // restores the popped free-slot order without retaining partial input.
-                for (int index = acquired[0]; index > 0; index--) {
-                    releaseSlot(acquired[index]);
+            if (end < 8) {
+                // At most nine integers; retain the original small-build path.
+                final int[] acquired = new int[(int) buildLength];
+                ensureCapacity((long) used + Math.max(0L, buildLength - 1L - freeCount));
+                try {
+                    return buildSmall(iterator, 0, end, 0, NONE, NONE, acquired);
+                } catch (final RuntimeException | Error failure) {
+                    for (int index = acquired[0]; index > 0; index--) {
+                        releaseSlot(acquired[index]);
+                    }
+                    throw failure;
                 }
+            }
+            ensureCapacity((long) used + Math.max(0L, buildLength - 1L - freeCount));
+            final int slot = acquireBuildSlot(NONE, NONE);
+            try {
+                build(iterator, slot, 0, end, 0);
+                return slot;
+            } catch (final RuntimeException | Error failure) {
+                // Acquisition is preorder, so right/left/root restores the
+                // same free-slot order as the former reversed journal.
+                releaseBuildTree(slot);
                 throw failure;
             }
         }
 
-        private int build(final Iterator<? extends E> iterator, final int start, final int end,
+        private int buildSmall(final Iterator<? extends E> iterator, final int start, final int end,
                 final int parentPosition, final int previous, final int next, final int[] acquired) {
             final int slot = acquireSlot();
             acquired[++acquired[0]] = slot;
             final int mid = start + (end - start) / 2;
             state[slot] = LIVE;
             if (start < mid) {
-                final int child = build(iterator, start, mid - 1, mid, previous, slot, acquired);
+                final int child = buildSmall(iterator, start, mid - 1, mid, previous, slot, acquired);
                 left[slot] = child;
             } else {
                 state[slot] |= LEFT_PREVIOUS;
@@ -194,7 +205,7 @@ public class TreeList<E> extends AbstractList<E> {
             values[slot] = value;
             relativePosition[slot] = mid - parentPosition;
             if (mid < end) {
-                final int child = build(iterator, mid + 1, end, mid, slot, next, acquired);
+                final int child = buildSmall(iterator, mid + 1, end, mid, slot, next, acquired);
                 right[slot] = child;
             } else {
                 state[slot] |= RIGHT_NEXT;
@@ -202,6 +213,47 @@ public class TreeList<E> extends AbstractList<E> {
             }
             recalcHeight(slot);
             return slot;
+        }
+
+        /** Initialize threads before publishing an uncommitted child link. */
+        private int acquireBuildSlot(final int previous, final int next) {
+            final int slot = acquireSlot();
+            state[slot] = LEFT_PREVIOUS | RIGHT_NEXT | LIVE;
+            left[slot] = previous;
+            right[slot] = next;
+            return slot;
+        }
+
+        private void build(final Iterator<? extends E> iterator, final int slot,
+                final int start, final int end, final int parentPosition) {
+            final int mid = start + (end - start) / 2;
+            if (start < mid) {
+                final int child = acquireBuildSlot(left[slot], slot);
+                left[slot] = child;
+                state[slot] &= ~LEFT_PREVIOUS;
+                build(iterator, child, start, mid - 1, mid);
+            }
+            final E value = iterator.next();
+            values[slot] = value;
+            relativePosition[slot] = mid - parentPosition;
+            if (mid < end) {
+                final int child = acquireBuildSlot(slot, right[slot]);
+                right[slot] = child;
+                state[slot] &= ~RIGHT_NEXT;
+                build(iterator, child, mid + 1, end, mid);
+            }
+            recalcHeight(slot);
+        }
+
+        /** Release only the uncommitted balanced subtree, never its threads. */
+        private void releaseBuildTree(final int slot) {
+            if (slot != NONE) {
+                final int leftChild = leftSubTree(slot);
+                final int rightChild = rightSubTree(slot);
+                releaseBuildTree(rightChild);
+                releaseBuildTree(leftChild);
+                releaseSlot(slot);
+            }
         }
 
         private int leftSubTree(final int slot) {
