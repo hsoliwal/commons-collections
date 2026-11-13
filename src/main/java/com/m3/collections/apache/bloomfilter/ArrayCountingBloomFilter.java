@@ -14,13 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+// Modified 2026-11-13 by Hitesh Soliwal and Synexia contributors: maintain positive-cell cardinality and export directly.
 package com.m3.collections.apache.bloomfilter;
 
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.function.IntPredicate;
 import java.util.function.LongPredicate;
-import java.util.stream.IntStream;
 
 /**
  * A counting Bloom filter using an int array to track cells for each enabled bit.
@@ -59,6 +59,9 @@ public final class ArrayCountingBloomFilter implements CountingBloomFilter {
      */
     private final int[] cells;
 
+    /** Number of strictly positive cells, including after an invalid-state transition. */
+    private int cardinality;
+
     /**
      * The state flag. This is a bitwise {@code OR} of the entire history of all updated
      * cells. If negative then a negative cell or integer overflow has occurred on
@@ -88,6 +91,7 @@ public final class ArrayCountingBloomFilter implements CountingBloomFilter {
     private ArrayCountingBloomFilter(final ArrayCountingBloomFilter source) {
         this.shape = source.shape;
         this.state = source.state;
+        this.cardinality = source.cardinality;
         this.cells = source.cells.clone();
     }
 
@@ -118,9 +122,17 @@ public final class ArrayCountingBloomFilter implements CountingBloomFilter {
      */
     private boolean add(final int idx, final int addend) {
         try {
-            final int updated = cells[idx] + addend;
+            final int previous = cells[idx];
+            final int updated = previous + addend;
             state |= updated;
             cells[idx] = updated;
+            if (previous > 0) {
+                if (updated <= 0) {
+                    cardinality--;
+                }
+            } else if (updated > 0) {
+                cardinality++;
+            }
             return true;
         } catch (final IndexOutOfBoundsException e) {
             throw new IllegalArgumentException(
@@ -130,12 +142,19 @@ public final class ArrayCountingBloomFilter implements CountingBloomFilter {
 
     @Override
     public int[] asIndexArray() {
-        return IntStream.range(0, cells.length).filter(i -> cells[i] > 0).toArray();
+        final int[] indices = new int[cardinality()];
+        int offset = 0;
+        for (int i = 0; i < cells.length; i++) {
+            if (cells[i] > 0) {
+                indices[offset++] = i;
+            }
+        }
+        return indices;
     }
 
     @Override
     public int cardinality() {
-        return (int) IntStream.range(0, cells.length).filter(i -> cells[i] > 0).count();
+        return cardinality;
     }
 
     @Override
@@ -146,6 +165,7 @@ public final class ArrayCountingBloomFilter implements CountingBloomFilter {
     @Override
     public void clear() {
         Arrays.fill(cells, 0);
+        cardinality = 0;
     }
 
     @Override
@@ -279,9 +299,17 @@ public final class ArrayCountingBloomFilter implements CountingBloomFilter {
      */
     private boolean subtract(final int idx, final int subtrahend) {
         try {
-            final int updated = cells[idx] - subtrahend;
+            final int previous = cells[idx];
+            final int updated = previous - subtrahend;
             state |= updated;
             cells[idx] = updated;
+            if (previous > 0) {
+                if (updated <= 0) {
+                    cardinality--;
+                }
+            } else if (updated > 0) {
+                cardinality++;
+            }
             return true;
         } catch (final IndexOutOfBoundsException e) {
             throw new IllegalArgumentException(
