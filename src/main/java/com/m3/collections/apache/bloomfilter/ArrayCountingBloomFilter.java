@@ -15,7 +15,8 @@
  * limitations under the License.
  */
 // Modified 2026-11-13 by Hitesh Soliwal and Synexia contributors: maintain positive-cell cardinality and export directly.
-// Modified 2026-11-13 by Hitesh Soliwal and Synexia contributors: direct array/bitmap hot paths.
+// Modified 2026-11-13 by Hitesh Soliwal and Synexia contributors: indexed nonzero masks for sparse traversal.
+// Modified 2026-11-13 by Hitesh Soliwal and Synexia contributors: detached bitmap export from parent-owned word mask.
 package com.m3.collections.apache.bloomfilter;
 
 import java.util.Arrays;
@@ -63,6 +64,12 @@ public final class ArrayCountingBloomFilter implements CountingBloomFilter {
     /** Number of strictly positive cells, including after an invalid-state transition. */
     private int cardinality;
 
+    /** Nonzero occupancy, including negative cells in the permanent invalid state. */
+    private final long[] nonzeroMask;
+
+    /** Exact number of nonzero cells (distinct from positive-only cardinality). */
+    private int nonzeroCount;
+
     /**
      * The state flag. This is a bitwise {@code OR} of the entire history of all updated
      * cells. If negative then a negative cell or integer overflow has occurred on
@@ -94,6 +101,8 @@ public final class ArrayCountingBloomFilter implements CountingBloomFilter {
         this.state = source.state;
         this.cardinality = source.cardinality;
         this.cells = source.cells.clone();
+        this.nonzeroCount = source.nonzeroCount;
+        this.nonzeroMask = source.nonzeroMask.clone();
     }
 
     /**
@@ -105,6 +114,7 @@ public final class ArrayCountingBloomFilter implements CountingBloomFilter {
         Objects.requireNonNull(shape, "shape");
         this.shape = shape;
         cells = new int[shape.getNumberOfBits()];
+        nonzeroMask = new long[BitMaps.numberOfBitMaps(cells.length)];
     }
 
     @Override
@@ -134,6 +144,7 @@ public final class ArrayCountingBloomFilter implements CountingBloomFilter {
             } else if (updated > 0) {
                 cardinality++;
             }
+            recordNonzeroTransition(idx, previous, updated);
             return true;
         } catch (final IndexOutOfBoundsException e) {
             throw new IllegalArgumentException(
@@ -141,34 +152,29 @@ public final class ArrayCountingBloomFilter implements CountingBloomFilter {
         }
     }
 
+    /**
+     * Keep the existing counter array authoritative while indexing only
+     * transitions between zero and nonzero values. Mutation failures leave
+     * both arrays untouched until the checked source element is written.
+     */
+    private void recordNonzeroTransition(final int index, final int previous, final int updated) {
+        if (previous == 0 && updated != 0) {
+            nonzeroMask[index >>> 6] |= 1L << index;
+            nonzeroCount++;
+        } else if (previous != 0 && updated == 0) {
+            nonzeroMask[index >>> 6] &= ~(1L << index);
+            nonzeroCount--;
+        }
+    }
+
+    /**
+     * Export a detached copy of the already maintained nonzero-cell bitmap.
+     * The mask includes positive and negative cells, even when the filter's
+     * permanent invalid-state flag is set. The parent keeps mask ownership.
+     */
     @Override
     public long[] asBitMapArray() {
-        final long[] result = new long[BitMaps.numberOfBitMaps(cells.length)];
-        // A valid filter has no negative cells, so the existing count proves emptiness.
-        // Invalid filters must still export negative cells and use the unchanged loop.
-        if (state >= 0 && cardinality == 0) {
-            return result;
-        }
-        int index = 0;
-        final int lastBlock = result.length - 1;
-        for (int block = 0; block < lastBlock; block++) {
-            long word = 0L;
-            for (int bit = 0; bit < Long.SIZE; bit++) {
-                if (cells[index++] != 0) {
-                    word |= 1L << bit;
-                }
-            }
-            result[block] = word;
-        }
-        // The final block may be partial. Negative invalid-state cells remain enabled.
-        long word = 0L;
-        for (int bit = 0; index < cells.length; bit++) {
-            if (cells[index++] != 0) {
-                word |= 1L << bit;
-            }
-        }
-        result[lastBlock] = word;
-        return result;
+        return nonzeroMask.clone();
     }
 
     @Override
@@ -196,7 +202,9 @@ public final class ArrayCountingBloomFilter implements CountingBloomFilter {
     @Override
     public void clear() {
         Arrays.fill(cells, 0);
+        Arrays.fill(nonzeroMask, 0L);
         cardinality = 0;
+        nonzeroCount = 0;
     }
 
     @Override
@@ -267,37 +275,44 @@ public final class ArrayCountingBloomFilter implements CountingBloomFilter {
     @Override
     public boolean processBitMaps(final LongPredicate consumer) {
         Objects.requireNonNull(consumer, "consumer");
-        final int blocksm1 = BitMaps.numberOfBitMaps(cells.length) - 1;
-        int i = 0;
-        long value;
-        // must break final block separate as the number of bits may not fall on the long boundary
-        for (int j = 0; j < blocksm1; j++) {
-            value = 0;
-            for (int k = 0; k < Long.SIZE; k++) {
-                if (cells[i++] != 0) {
-                    value |= BitMaps.getLongBit(k);
-                }
-            }
-            if (!consumer.test(value)) {
+        if (nonzeroMask.length == 0) {
+            // Preserve the incumbent zero-bit shape callback.
+            return consumer.test(0L);
+        }
+        // Read each word just before its callback. Callbacks that mutate
+        // later words are therefore observed in the original encounter order.
+        for (int word = 0; word < nonzeroMask.length; word++) {
+            if (!consumer.test(nonzeroMask[word])) {
                 return false;
             }
         }
-        // Final block
-        value = 0;
-        for (int k = 0; i < cells.length; k++) {
-            if (cells[i++] != 0) {
-                value |= BitMaps.getLongBit(k);
-            }
-        }
-        return consumer.test(value);
+        return true;
     }
 
     @Override
     public boolean processCells(final CellPredicate consumer) {
         Objects.requireNonNull(consumer, "consumer");
-        for (int i = 0; i < cells.length; i++) {
-            if (cells[i] != 0 && !consumer.test(i, cells[i])) {
-                return false;
+        if (nonzeroCount > cells.length / 4) {
+            // Dense scans are cheaper without one trailing-zero operation
+            // per cell. Preserve the original two reads around the callback.
+            for (int index = 0; index < cells.length; index++) {
+                if (cells[index] != 0 && !consumer.test(index, cells[index])) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        for (int word = 0; word < nonzeroMask.length; word++) {
+            long remaining = nonzeroMask[word];
+            while (remaining != 0) {
+                final int bit = Long.numberOfTrailingZeros(remaining);
+                final int index = (word << 6) + bit;
+                if (cells[index] != 0 && !consumer.test(index, cells[index])) {
+                    return false;
+                }
+                // Re-read after user callbacks, which may enable or clear
+                // later positions in this very word.
+                remaining = bit == 63 ? 0L : nonzeroMask[word] & (-1L << (bit + 1));
             }
         }
         return true;
@@ -306,9 +321,23 @@ public final class ArrayCountingBloomFilter implements CountingBloomFilter {
     @Override
     public boolean processIndices(final IntPredicate consumer) {
         Objects.requireNonNull(consumer, "consumer");
-        for (int i = 0; i < cells.length; i++) {
-            if (cells[i] != 0 && !consumer.test(i)) {
-                return false;
+        if (nonzeroCount > cells.length / 4) {
+            for (int index = 0; index < cells.length; index++) {
+                if (cells[index] != 0 && !consumer.test(index)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        for (int word = 0; word < nonzeroMask.length; word++) {
+            long remaining = nonzeroMask[word];
+            while (remaining != 0) {
+                final int bit = Long.numberOfTrailingZeros(remaining);
+                final int index = (word << 6) + bit;
+                if (cells[index] != 0 && !consumer.test(index)) {
+                    return false;
+                }
+                remaining = bit == 63 ? 0L : nonzeroMask[word] & (-1L << (bit + 1));
             }
         }
         return true;
@@ -341,6 +370,7 @@ public final class ArrayCountingBloomFilter implements CountingBloomFilter {
             } else if (updated > 0) {
                 cardinality++;
             }
+            recordNonzeroTransition(idx, previous, updated);
             return true;
         } catch (final IndexOutOfBoundsException e) {
             throw new IllegalArgumentException(

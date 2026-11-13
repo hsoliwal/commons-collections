@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: Apache-2.0
+name: M3 Commons Bloom nonzero array mask
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/m3-commons-bloom-nonzero-mask-20261113.yml'
+      - 'src/main/java/com/m3/collections/apache/bloomfilter/ArrayCountingBloomFilter.java'
+      - 'src/test/java/com/m3/collections/apache/bloomfilter/ArrayCountingBloomFilterMaskTest.java'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  bloom-provider-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Compile provider classes and run focused counting Bloom tests
+        run: mvn -B -ntp -Dtest=ArrayCountingBloomFilterMaskTest,M3ArrayCountingBloomFilterScanTest -Dsurefire.failIfNoSpecifiedTests=false test
