@@ -14,11 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+// Modified 2026 by Hitesh Soliwal and contributors: segmented array-owned mappings.
 package com.m3.collections.apache.map;
 
+import java.lang.ref.ReferenceQueue;
+import java.lang.ref.WeakReference;
 import java.util.AbstractCollection;
 import java.util.AbstractSet;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.ConcurrentModificationException;
 import java.util.HashMap;
@@ -27,6 +31,7 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.m3.collections.apache.KeyValue;
 
@@ -121,10 +126,10 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
             }
             while (bucket < buckets.length) {
                 synchronized (locks[bucket]) {
-                    Node<K, V> n = buckets[bucket];
-                    while (n != null) {
-                        current.add(n);
-                        n = n.next;
+                    int n = buckets[bucket];
+                    while (n != NONE) {
+                        current.add(entryAt(n));
+                        n = arena.next(n);
                     }
                     bucket++;
                     if (!current.isEmpty()) {
@@ -173,10 +178,16 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
             final Map.Entry<?, ?> entry = (Map.Entry<?, ?>) obj;
             final int hash = getHash(entry.getKey());
             synchronized (locks[hash]) {
-                for (Node<K, V> n = buckets[hash]; n != null; n = n.next) {
-                    if (n.equals(entry)) {
-                        return true;
+                final Lock lock = locks[hash];
+                arena.enter(lock);
+                try {
+                    for (int n = buckets[hash]; n != NONE; n = arena.next(n)) {
+                        if (entryEquals(n, entry)) {
+                            return true;
+                        }
                     }
+                } finally {
+                    arena.leave(lock, buckets[hash]);
                 }
             }
             return false;
@@ -195,11 +206,17 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
             final Map.Entry<?, ?> entry = (Map.Entry<?, ?>) obj;
             final int hash = getHash(entry.getKey());
             synchronized (locks[hash]) {
-                for (Node<K, V> n = buckets[hash]; n != null; n = n.next) {
-                    if (n.equals(entry)) {
-                        StaticBucketMap.this.remove(n.getKey());
-                        return true;
+                final Lock lock = locks[hash];
+                arena.enter(lock);
+                try {
+                    for (int n = buckets[hash]; n != NONE; n = arena.next(n)) {
+                        if (entryEquals(n, entry)) {
+                            StaticBucketMap.this.remove(arena.key(n));
+                            return true;
+                        }
                     }
+                } finally {
+                    arena.leave(lock, buckets[hash]);
                 }
             }
             return false;
@@ -242,12 +259,18 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
         public boolean remove(final Object obj) {
             final int hash = getHash(obj);
             synchronized (locks[hash]) {
-                for (Node<K, V> n = buckets[hash]; n != null; n = n.next) {
-                    final Object k = n.getKey();
-                    if (Objects.equals(k, obj)) {
-                        StaticBucketMap.this.remove(k);
-                        return true;
+                final Lock lock = locks[hash];
+                arena.enter(lock);
+                try {
+                    for (int n = buckets[hash]; n != NONE; n = arena.next(n)) {
+                        final Object k = arena.key(n);
+                        if (Objects.equals(k, obj)) {
+                            StaticBucketMap.this.remove(k);
+                            return true;
+                        }
                     }
+                } finally {
+                    arena.leave(lock, buckets[hash]);
                 }
             }
             return false;
@@ -260,20 +283,263 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
 
     }
 
-    /**
-     * The lock object, which also includes a count of the nodes in this lock.
-     */
+    private static final int NONE = -1;
+    private static final int LIVE = -2;
+
+    /** The original bucket monitor also owns its reusable and retired coordinates. */
     private static final class Lock {
-        public int size;
+        int size;
+        int free = NONE;
+        int retired = NONE;
+        int readers;
+        boolean reentered;
     }
 
-    /**
-     * The Map.Entry for the StaticBucketMap.
-     */
+    /** Stable payload pages: growing the directory never moves live mappings. */
+    private static final class Segment {
+        final Object[] data = new Object[Arena.PAGE_SIZE * 2];
+        final long[] links = new long[Arena.PAGE_SIZE];
+        volatile EntryReference[] projections;
+        ReferenceQueue<Node<?, ?>> collected;
+
+        void drain() {
+            if (collected != null) {
+                EntryReference reference;
+                while ((reference = (EntryReference) collected.poll()) != null) {
+                    if (projections[reference.offset] == reference) {
+                        projections[reference.offset] = null;
+                    }
+                }
+            }
+        }
+    }
+
+    /** A weak identity registration exists only after an entry has been exposed. */
+    private static final class EntryReference extends WeakReference<Node<?, ?>> {
+        final int offset;
+
+        EntryReference(final Node<?, ?> node, final ReferenceQueue<Node<?, ?>> queue,
+                final int offset) {
+            super(node, queue);
+            this.offset = offset;
+        }
+    }
+
+    /** No mapping object is allocated by normal insertion or replacement. */
+    private static final class Arena {
+        static final int PAGE_SHIFT = 6;
+        static final int PAGE_SIZE = 1 << PAGE_SHIFT;
+        static final int PAGE_MASK = PAGE_SIZE - 1;
+        private final AtomicInteger used = new AtomicInteger();
+        private volatile Segment[] pages = new Segment[0];
+
+        private Segment page(final int slot) {
+            return pages[slot >>> PAGE_SHIFT];
+        }
+
+        private synchronized void ensurePage(final int pageIndex) {
+            Segment[] current = pages;
+            if (pageIndex >= current.length) {
+                current = Arrays.copyOf(current,
+                        Math.max(pageIndex + 1, Math.max(4, current.length + (current.length >>> 1))));
+            }
+            if (current[pageIndex] == null) {
+                current[pageIndex] = new Segment();
+            }
+            pages = current;
+        }
+
+        private int freshSlot() {
+            for (;;) {
+                final int slot = used.get();
+                if (slot == Integer.MAX_VALUE) {
+                    throw new OutOfMemoryError("StaticBucketMap slot capacity exhausted");
+                }
+                final int pageIndex = slot >>> PAGE_SHIFT;
+                final Segment[] current = pages;
+                if (pageIndex >= current.length || current[pageIndex] == null) {
+                    ensurePage(pageIndex);
+                }
+                if (used.compareAndSet(slot, slot + 1)) {
+                    return slot;
+                }
+            }
+        }
+
+        int acquire(final Lock lock, final Object key, final Object value) {
+            final int slot;
+            if (lock.free == NONE) {
+                slot = freshSlot();
+            } else {
+                slot = lock.free;
+                lock.free = upper(slot);
+            }
+            final Segment page = page(slot);
+            final int offset = slot & PAGE_MASK;
+            page.data[offset * 2] = key;
+            page.data[offset * 2 + 1] = value;
+            page.links[offset] = ((long) LIVE << 32) | 0xffffffffL;
+            return slot;
+        }
+
+        int next(final int slot) {
+            return (int) page(slot).links[slot & PAGE_MASK];
+        }
+
+        void next(final int slot, final int next) {
+            final Segment page = page(slot);
+            final int offset = slot & PAGE_MASK;
+            page.links[offset] = (page.links[offset] & 0xffffffff00000000L) | (next & 0xffffffffL);
+        }
+
+        private int upper(final int slot) {
+            return (int) (page(slot).links[slot & PAGE_MASK] >>> 32);
+        }
+
+        private void upper(final int slot, final int state) {
+            final Segment page = page(slot);
+            final int offset = slot & PAGE_MASK;
+            page.links[offset] = ((long) state << 32) | (page.links[offset] & 0xffffffffL);
+        }
+
+        Object key(final int slot) {
+            return page(slot).data[(slot & PAGE_MASK) * 2];
+        }
+
+        Object rawValue(final int slot) {
+            return page(slot).data[(slot & PAGE_MASK) * 2 + 1];
+        }
+
+        Object value(final int slot) {
+            final Node<?, ?> node = projected(slot);
+            return node == null ? rawValue(slot) : node.value;
+        }
+
+        void value(final int slot, final Object value) {
+            final Node<?, ?> node = projected(slot);
+            if (node == null) {
+                page(slot).data[(slot & PAGE_MASK) * 2 + 1] = value;
+            } else {
+                // No user callback is made under this internal publication lock.
+                synchronized (this) {
+                    node.detachedValue(value);
+                    if (node.owner != null) {
+                        page(slot).data[(slot & PAGE_MASK) * 2 + 1] = value;
+                    }
+                }
+            }
+        }
+
+        Node<?, ?> projected(final int slot) {
+            final EntryReference[] references = page(slot).projections;
+            if (references == null) {
+                return null;
+            }
+            final EntryReference reference = references[slot & PAGE_MASK];
+            return reference == null ? null : reference.get();
+        }
+
+        Node<?, ?> entry(final int slot) {
+            final Segment page = page(slot);
+            synchronized (page) {
+                if (page.projections == null) {
+                    // Publish both support objects only after allocation succeeds.
+                    final EntryReference[] references = new EntryReference[PAGE_SIZE];
+                    final ReferenceQueue<Node<?, ?>> queue = new ReferenceQueue<>();
+                    page.collected = queue;
+                    page.projections = references;
+                }
+                page.drain();
+                final int offset = slot & PAGE_MASK;
+                final EntryReference reference = page.projections[offset];
+                Node<?, ?> node = reference == null ? null : reference.get();
+                if (node == null) {
+                    node = new Node<>(key(slot), rawValue(slot), this, slot);
+                    page.projections[offset] = new EntryReference(node, page.collected, offset);
+                }
+                return node;
+            }
+        }
+
+        void enter(final Lock lock) {
+            if (lock.readers++ != 0) {
+                lock.reentered = true;
+            }
+        }
+
+        void retire(final Lock lock, final int slot) {
+            if (upper(slot) == LIVE) {
+                // Zero encodes the end of this deferred list. The sign bit is
+                // reserved for a reachable-again marker during outermost cleanup.
+                upper(slot, lock.retired + 1);
+                lock.retired = slot;
+            }
+        }
+
+        void leave(final Lock lock, final int head) {
+            if (--lock.readers != 0) {
+                return;
+            }
+            if (lock.reentered && lock.retired != NONE) {
+                // The original linked implementation can relink an old suffix
+                // after a callback clears/removes it. Do not recycle that suffix.
+                for (int slot = head; slot != NONE; slot = next(slot)) {
+                    final int state = upper(slot);
+                    if (state != LIVE) {
+                        upper(slot, state | Integer.MIN_VALUE);
+                    }
+                }
+            }
+            while (lock.retired != NONE) {
+                final int slot = lock.retired;
+                final int state = upper(slot);
+                lock.retired = (state & Integer.MAX_VALUE) - 1;
+                if (state < 0) {
+                    upper(slot, LIVE);
+                    continue;
+                }
+                final Segment page = page(slot);
+                final int offset = slot & PAGE_MASK;
+                final Node<?, ?> node = projected(slot);
+                if (node != null) {
+                    synchronized (this) {
+                        node.detachedValue(rawValue(slot));
+                        node.owner = null;
+                    }
+                }
+                page.data[offset * 2] = null;
+                page.data[offset * 2 + 1] = null;
+                synchronized (page) {
+                    if (page.projections != null) {
+                        page.projections[offset] = null;
+                        page.drain();
+                    }
+                }
+                page.links[offset] = ((long) lock.free << 32) | 0xffffffffL;
+                lock.free = slot;
+            }
+            lock.reentered = false;
+        }
+    }
+
+    /** Lazy API projection, never the map's retained storage or successor link. */
     private static final class Node<K, V> implements Map.Entry<K, V>, KeyValue<K, V> {
-        protected K key;
-        protected V value;
-        protected Node<K, V> next;
+        private final K key;
+        private volatile V value;
+        private volatile Arena owner;
+        private final int slot;
+
+        Node(final K key, final V value, final Arena owner, final int slot) {
+            this.key = key;
+            this.value = value;
+            this.owner = owner;
+            this.slot = slot;
+        }
+
+        @SuppressWarnings("unchecked")
+        void detachedValue(final Object replacement) {
+            value = (V) replacement;
+        }
 
         @Override
         public boolean equals(final Object obj) {
@@ -283,10 +549,8 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
             if (!(obj instanceof Map.Entry<?, ?>)) {
                 return false;
             }
-
-            final Map.Entry<?, ?> e2 = (Map.Entry<?, ?>) obj;
-            return Objects.equals(key, e2.getKey()) &&
-                   Objects.equals(value, e2.getValue());
+            final Map.Entry<?, ?> other = (Map.Entry<?, ?>) obj;
+            return Objects.equals(key, other.getKey()) && Objects.equals(getValue(), other.getValue());
         }
 
         @Override
@@ -301,15 +565,27 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
 
         @Override
         public int hashCode() {
-            return (key == null ? 0 : key.hashCode()) ^
-                    (value == null ? 0 : value.hashCode());
+            final int keyHash = key == null ? 0 : key.hashCode();
+            final V current = getValue();
+            return keyHash ^ (current == null ? 0 : current.hashCode());
         }
 
         @Override
-        public V setValue(final V value) {
-            final V old = this.value;
-            this.value = value;
-            return old;
+        public V setValue(final V replacement) {
+            final Arena current = owner;
+            if (current == null) {
+                final V previous = value;
+                value = replacement;
+                return previous;
+            }
+            synchronized (current) {
+                final V previous = value;
+                value = replacement;
+                if (owner != null) {
+                    current.page(slot).data[(slot & Arena.PAGE_MASK) * 2 + 1] = replacement;
+                }
+                return previous;
+            }
         }
     }
 
@@ -341,11 +617,29 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
 
     }
 
+    @SuppressWarnings("unchecked")
+    private V valueAt(final int slot) {
+        return (V) arena.value(slot);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map.Entry<K, V> entryAt(final int slot) {
+        return (Map.Entry<K, V>) arena.entry(slot);
+    }
+
+    private boolean entryEquals(final int slot, final Map.Entry<?, ?> entry) {
+        final Node<?, ?> projection = arena.projected(slot);
+        return projection == entry || Objects.equals(arena.key(slot), entry.getKey())
+                && Objects.equals(arena.value(slot), entry.getValue());
+    }
+
     /** The default number of buckets to use */
     private static final int DEFAULT_BUCKETS = 255;
 
     /** The array of buckets, where the actual data is held */
-    private final Node<K, V>[] buckets;
+    private final int[] buckets;
+
+    private final Arena arena = new Arena();
 
     /** The matching array of locks */
     private final Lock[] locks;
@@ -367,7 +661,6 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
      *
      * @param numBuckets  The number of buckets for this map
      */
-    @SuppressWarnings("unchecked")
     public StaticBucketMap(final int numBuckets) {
         int size = Math.max(17, numBuckets);
 
@@ -376,7 +669,8 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
             size--;
         }
 
-        buckets = new Node[size];
+        buckets = new int[size];
+        Arrays.fill(buckets, NONE);
         locks = new Lock[size];
 
         for (int i = 0; i < size; i++) {
@@ -437,8 +731,16 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
         for (int i = 0; i < buckets.length; i++) {
             final Lock lock = locks[i];
             synchronized (lock) {
-                buckets[i] = null;
-                lock.size = 0;
+                arena.enter(lock);
+                try {
+                    for (int n = buckets[i]; n != NONE; n = arena.next(n)) {
+                        arena.retire(lock, n);
+                    }
+                    buckets[i] = NONE;
+                    lock.size = 0;
+                } finally {
+                    arena.leave(lock, buckets[i]);
+                }
             }
         }
     }
@@ -452,16 +754,17 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
     @Override
     public boolean containsKey(final Object key) {
         final int hash = getHash(key);
-
-        synchronized (locks[hash]) {
-            Node<K, V> n = buckets[hash];
-
-            while (n != null) {
-                if (Objects.equals(n.key, key)) {
-                    return true;
+        final Lock lock = locks[hash];
+        synchronized (lock) {
+            arena.enter(lock);
+            try {
+                for (int n = buckets[hash]; n != NONE; n = arena.next(n)) {
+                    if (Objects.equals(arena.key(n), key)) {
+                        return true;
+                    }
                 }
-
-                n = n.next;
+            } finally {
+                arena.leave(lock, buckets[hash]);
             }
         }
         return false;
@@ -476,15 +779,17 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
     @Override
     public boolean containsValue(final Object value) {
         for (int i = 0; i < buckets.length; i++) {
-            synchronized (locks[i]) {
-                Node<K, V> n = buckets[i];
-
-                while (n != null) {
-                    if (Objects.equals(n.value, value)) {
-                        return true;
+            final Lock lock = locks[i];
+            synchronized (lock) {
+                arena.enter(lock);
+                try {
+                    for (int n = buckets[i]; n != NONE; n = arena.next(n)) {
+                        if (Objects.equals(arena.value(n), value)) {
+                            return true;
+                        }
                     }
-
-                    n = n.next;
+                } finally {
+                    arena.leave(lock, buckets[i]);
                 }
             }
         }
@@ -528,16 +833,17 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
     @Override
     public V get(final Object key) {
         final int hash = getHash(key);
-
-        synchronized (locks[hash]) {
-            Node<K, V> n = buckets[hash];
-
-            while (n != null) {
-                if (Objects.equals(n.key, key)) {
-                    return n.value;
+        final Lock lock = locks[hash];
+        synchronized (lock) {
+            arena.enter(lock);
+            try {
+                for (int n = buckets[hash]; n != NONE; n = arena.next(n)) {
+                    if (Objects.equals(arena.key(n), key)) {
+                        return valueAt(n);
+                    }
                 }
-
-                n = n.next;
+            } finally {
+                arena.leave(lock, buckets[hash]);
             }
         }
         return null;
@@ -578,19 +884,24 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
      */
     @Override
     public int hashCode() {
-        int hashCode = 0;
-
+        int result = 0;
         for (int i = 0; i < buckets.length; i++) {
-            synchronized (locks[i]) {
-                Node<K, V> n = buckets[i];
-
-                while (n != null) {
-                    hashCode += n.hashCode();
-                    n = n.next;
+            final Lock lock = locks[i];
+            synchronized (lock) {
+                arena.enter(lock);
+                try {
+                    for (int n = buckets[i]; n != NONE; n = arena.next(n)) {
+                        final Object key = arena.key(n);
+                        final int keyHash = key == null ? 0 : key.hashCode();
+                        final Object value = arena.value(n);
+                        result += keyHash ^ (value == null ? 0 : value.hashCode());
+                    }
+                } finally {
+                    arena.leave(lock, buckets[i]);
                 }
             }
         }
-        return hashCode;
+        return result;
     }
 
     /**
@@ -623,39 +934,33 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
     @Override
     public V put(final K key, final V value) {
         final int hash = getHash(key);
-
-        synchronized (locks[hash]) {
-            Node<K, V> n = buckets[hash];
-
-            if (n == null) {
-                n = new Node<>();
-                n.key = key;
-                n.value = value;
-                buckets[hash] = n;
-                locks[hash].size++;
-                return null;
-            }
-
-            // Set n to the last node in the linked list.  Check each key along the way
-            //  If the key is found, then change the value of that node and return
-            //  the old value.
-            for (Node<K, V> next = n; next != null; next = next.next) {
-                n = next;
-
-                if (Objects.equals(n.key, key)) {
-                    final V returnVal = n.value;
-                    n.value = value;
-                    return returnVal;
+        final Lock lock = locks[hash];
+        synchronized (lock) {
+            arena.enter(lock);
+            try {
+                int n = buckets[hash];
+                if (n == NONE) {
+                    buckets[hash] = arena.acquire(lock, key, value);
+                    lock.size++;
+                    return null;
                 }
+                for (int next = n; next != NONE; next = arena.next(next)) {
+                    n = next;
+                    if (Objects.equals(arena.key(n), key)) {
+                        final V previous = valueAt(n);
+                        arena.value(n, value);
+                        return previous;
+                    }
+                }
+                final int appended = arena.acquire(lock, key, value);
+                arena.next(n, appended);
+                if (arena.upper(n) != LIVE) {
+                    arena.retire(lock, appended);
+                }
+                lock.size++;
+            } finally {
+                arena.leave(lock, buckets[hash]);
             }
-
-            // The key was not found in the current list of nodes, add it to the end
-            //  in a new node.
-            final Node<K, V> newNode = new Node<>();
-            newNode.key = key;
-            newNode.value = value;
-            n.next = newNode;
-            locks[hash].size++;
         }
         return null;
     }
@@ -682,27 +987,27 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
     @Override
     public V remove(final Object key) {
         final int hash = getHash(key);
-
-        synchronized (locks[hash]) {
-            Node<K, V> n = buckets[hash];
-            Node<K, V> prev = null;
-
-            while (n != null) {
-                if (Objects.equals(n.key, key)) {
-                    // Remove this node from the linked list of nodes.
-                    if (prev == null) {
-                        // This node was the head, set the next node to be the new head.
-                        buckets[hash] = n.next;
-                    } else {
-                        // Set the next node of the previous node to be the node after this one.
-                        prev.next = n.next;
+        final Lock lock = locks[hash];
+        synchronized (lock) {
+            arena.enter(lock);
+            try {
+                int previous = NONE;
+                for (int n = buckets[hash]; n != NONE; n = arena.next(n)) {
+                    if (Objects.equals(arena.key(n), key)) {
+                        if (previous == NONE) {
+                            buckets[hash] = arena.next(n);
+                        } else {
+                            arena.next(previous, arena.next(n));
+                        }
+                        lock.size--;
+                        final V result = valueAt(n);
+                        arena.retire(lock, n);
+                        return result;
                     }
-                    locks[hash].size--;
-                    return n.value;
+                    previous = n;
                 }
-
-                prev = n;
-                n = n.next;
+            } finally {
+                arena.leave(lock, buckets[hash]);
             }
         }
         return null;
