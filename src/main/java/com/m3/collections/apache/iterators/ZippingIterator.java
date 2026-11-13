@@ -16,13 +16,9 @@
  */
 package com.m3.collections.apache.iterators;
 
-import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
-
-import com.m3.collections.apache.FluentIterable;
 
 /**
  * Provides an interleaved iteration over the elements contained in a
@@ -38,8 +34,18 @@ import com.m3.collections.apache.FluentIterable;
  */
 public class ZippingIterator<E> implements Iterator<E> {
 
-    /** The {@link Iterator}s to evaluate. */
-    private final Iterator<Iterator<? extends E>> iterators;
+    /** Snapshot of the child iterator slots, in caller order. */
+    private final Iterator<? extends E>[] iterators;
+
+    /** Primitive circular links for the still-live iterator slots. */
+    private final int[] successor;
+    private final int[] predecessor;
+
+    /** Next live slot to inspect, or -1 when all children are exhausted. */
+    private int cursor;
+
+    /** Number of live children in the circular index lanes. */
+    private int live;
 
     /** The next iterator to use for next(). */
     private Iterator<? extends E> nextIterator;
@@ -55,13 +61,16 @@ public class ZippingIterator<E> implements Iterator<E> {
      * @throws NullPointerException if any iterator is null
      */
     public ZippingIterator(final Iterator<? extends E>... iterators) {
-        // create a mutable list to be able to remove exhausted iterators
-        final List<Iterator<? extends E>> list = new ArrayList<>();
-        for (final Iterator<? extends E> iterator : iterators) {
-            Objects.requireNonNull(iterator, "iterator");
-            list.add(iterator);
+        this.iterators = iterators.clone();
+        this.successor = new int[iterators.length];
+        this.predecessor = new int[iterators.length];
+        for (int i = 0; i < iterators.length; i++) {
+            Objects.requireNonNull(this.iterators[i], "iterator");
+            this.successor[i] = i + 1 == iterators.length ? 0 : i + 1;
+            this.predecessor[i] = i == 0 ? iterators.length - 1 : i - 1;
         }
-        this.iterators = FluentIterable.of(list).loop().iterator();
+        this.live = iterators.length;
+        this.cursor = iterators.length == 0 ? -1 : 0;
     }
 
     /**
@@ -106,14 +115,25 @@ public class ZippingIterator<E> implements Iterator<E> {
             return true;
         }
 
-        while (iterators.hasNext()) {
-            final Iterator<? extends E> childIterator = iterators.next();
+        while (live > 0) {
+            final int index = cursor;
+            cursor = successor[index];
+            final Iterator<? extends E> childIterator = iterators[index];
             if (childIterator.hasNext()) {
                 nextIterator = childIterator;
                 return true;
             }
-            // iterator is exhausted, remove it
-            iterators.remove();
+            // Unlink the exhausted slot in O(1), without shifting a list.
+            if (live == 1) {
+                cursor = -1;
+            } else {
+                final int before = predecessor[index];
+                final int after = successor[index];
+                successor[before] = after;
+                predecessor[after] = before;
+            }
+            iterators[index] = null; // release exhausted child, preserve lastReturned
+            live--;
         }
         return false;
     }
