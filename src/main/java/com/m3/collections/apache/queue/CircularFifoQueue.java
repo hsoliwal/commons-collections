@@ -277,6 +277,63 @@ public class CircularFifoQueue<E> extends AbstractCollection<E>
     }
 
     /**
+     * Only use the direct ring path for keys whose final equals implementation
+     * cannot mutate the queue. Custom equality retains iterator callback behavior.
+     */
+    private static boolean safeEqualityQuery(final Object value) {
+        if (value == null || value instanceof Enum<?>) {
+            return true;
+        }
+        final Class<?> type = value.getClass();
+        return type == String.class || type == Integer.class || type == Long.class
+                || type == Short.class || type == Byte.class || type == Character.class
+                || type == Boolean.class || type == Float.class || type == Double.class;
+    }
+
+    /** Returns the physical slot of the first match without iterator allocation. */
+    private int findRingIndex(final Object value) {
+        final int count = size();
+        int position = start;
+        for (int i = 0; i < count; i++) {
+            if (value == null ? elements[position] == null : value.equals(elements[position])) {
+                return position;
+            }
+            if (++position == maxElements) {
+                position = 0;
+            }
+        }
+        return -1;
+    }
+
+    @Override
+    public boolean contains(final Object value) {
+        if (getClass() != CircularFifoQueue.class || !safeEqualityQuery(value)) {
+            return super.contains(value);
+        }
+        return findRingIndex(value) >= 0;
+    }
+
+    @Override
+    public boolean remove(final Object value) {
+        if (getClass() != CircularFifoQueue.class || !safeEqualityQuery(value)) {
+            return super.remove(value);
+        }
+        final int position = findRingIndex(value);
+        if (position < 0) {
+            return false;
+        }
+        if (position == start) {
+            remove();
+        } else {
+            shiftSuffixTowardRemovedSlot(position);
+            end = decrement(end);
+            elements[end] = null;
+            full = false;
+        }
+        return true;
+    }
+
+    /**
      * Returns an iterator over this queue's elements.
      *
      * @return An iterator over this queue's elements
