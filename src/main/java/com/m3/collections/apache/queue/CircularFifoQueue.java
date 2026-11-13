@@ -128,6 +128,19 @@ public class CircularFifoQueue<E> extends AbstractCollection<E>
     public boolean add(final E element) {
         Objects.requireNonNull(element, "element");
 
+        // An exact CircularFifoQueue owns its ring without subclass hooks.
+        // In the full state, start == end. Replacing that one slot and
+        // advancing both cursors preserves the original physical layout,
+        // without clearing and rewriting the evicted reference.
+        // Retain virtual isAtFullCapacity()/remove() for every subclass.
+        if (full && getClass() == CircularFifoQueue.class) {
+            final int next = increment(end);
+            elements[end] = element;
+            start = next;
+            end = next;
+            return true;
+        }
+
         if (isAtFullCapacity()) {
             remove();
         }
