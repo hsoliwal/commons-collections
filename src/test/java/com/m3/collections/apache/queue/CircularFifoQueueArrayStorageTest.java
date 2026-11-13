@@ -254,7 +254,7 @@ class CircularFifoQueueArrayStorageTest {
     void publicProtectedAndSerializedSurfacesAreUnchanged() throws Exception {
         final Class<?> original = oracle.originalClass("queue.CircularFifoQueue");
         assertEquals(surface(original),
-                declaredSurfaceWithExactArrayOverrides(original, CircularFifoQueue.class));
+                declaredSurfaceWithExactHotPathOverrides(original, CircularFifoQueue.class));
         assertEquals(effectiveSurface(original), effectiveSurface(CircularFifoQueue.class));
         assertEquals(original.getModifiers(), CircularFifoQueue.class.getModifiers(), "class modifiers");
         assertEquals(Arrays.toString(original.getGenericInterfaces()),
@@ -298,7 +298,7 @@ class CircularFifoQueueArrayStorageTest {
      * two operations that the frozen preimage already inherits from AbstractCollection.
      * The declarations remain optional so this gate also accepts the unchanged baseline.
      */
-    private static TreeSet<String> declaredSurfaceWithExactArrayOverrides(final Class<?> original,
+    private static TreeSet<String> declaredSurfaceWithExactHotPathOverrides(final Class<?> original,
             final Class<?> current) throws Exception {
         final TreeSet<String> result = surface(current);
         for (final Class<?>[] parameters : new Class<?>[][] {new Class<?>[0], {Object[].class}}) {
@@ -313,6 +313,19 @@ class CircularFifoQueueArrayStorageTest {
             assertEquals(methodSignature(inherited), methodSignature(implementation),
                     "override must preserve modifiers, generic signature and declared exceptions");
             result.remove(implementation.toGenericString());
+        }
+        // The fast membership override is also optional and must be exactly
+        // source-compatible with the inherited AbstractCollection API.
+        final Method inheritedContains = original.getMethod("contains", Object.class);
+        assertEquals(AbstractCollection.class, inheritedContains.getDeclaringClass(),
+                "frozen inherited membership owner");
+        try {
+            final Method implementation = current.getDeclaredMethod("contains", Object.class);
+            assertEquals(methodSignature(inheritedContains), methodSignature(implementation),
+                    "contains override must preserve its exact inherited declaration");
+            result.remove(implementation.toGenericString());
+        } catch (final NoSuchMethodException stillInherited) {
+            // The pre-optimization baseline is valid too.
         }
         return result;
     }
