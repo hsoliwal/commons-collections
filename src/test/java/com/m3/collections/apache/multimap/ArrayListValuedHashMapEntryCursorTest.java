@@ -72,7 +72,7 @@ class ArrayListValuedHashMapEntryCursorTest {
         map.put("other", null);
         final Map<String, List<Integer>> model = new HashMap<>();
         model.put(null, new ArrayList<>(java.util.Arrays.asList(null, null)));
-        model.put("same", new ArrayList<>(List.of(1, 1)));
+        model.put("same", new ArrayList<>(java.util.Arrays.asList(1, 1)));
         model.put("other", new ArrayList<>(java.util.Arrays.asList((Integer) null)));
         assertEquals(flattened(model), entries(map));
         assertEquals(5, map.size());
@@ -98,7 +98,7 @@ class ArrayListValuedHashMapEntryCursorTest {
         assertEquals(40, removed);
         assertEquals(40, map.size());
         for (int i = 0; i < 40; i++) {
-            assertEquals(List.of(i), map.get("key" + i));
+            assertEquals(java.util.Collections.singletonList(i), map.get("key" + i));
         }
 
         final Iterator<Entry<String, Integer>> drain = map.entries().iterator();
@@ -132,11 +132,12 @@ class ArrayListValuedHashMapEntryCursorTest {
             final String key = random.nextInt(13) == 0 ? null : "k" + random.nextInt(95);
             final Integer value = random.nextInt(7) == 0 ? null : random.nextInt(30);
             switch (random.nextInt(4)) {
-                case 0, 1 -> {
+                case 0:
+                case 1:
                     actual.put(key, value);
                     model.computeIfAbsent(key, ignored -> new ArrayList<>()).add(value);
-                }
-                case 2 -> {
+                    break;
+                case 2:
                     actual.removeMapping(key, value);
                     final List<Integer> list = model.get(key);
                     if (list != null) {
@@ -145,11 +146,11 @@ class ArrayListValuedHashMapEntryCursorTest {
                             model.remove(key);
                         }
                     }
-                }
-                default -> {
+                    break;
+                default:
                     actual.remove(key);
                     model.remove(key);
-                }
+                    break;
             }
             if ((step & 15) == 0) {
                 assertEquals(flattened(model), entries(actual), "step=" + step);
