@@ -178,6 +178,37 @@ public class CircularFifoQueue<E> extends AbstractCollection<E>
     }
 
     /**
+     * Checks the live ring in iterator order without constructing an iterator.
+     *
+     * <p>The local cursor deliberately follows the existing iterator's
+     * full-ring and dynamic-end rules. In particular, the candidate's
+     * {@code equals} method runs after advancing the local cursor, so a
+     * reentrant modification has the same subsequent traversal behavior as
+     * the inherited {@link AbstractCollection#contains(Object)}.
+     * Subclasses retain inherited dispatch through their own iterators.</p>
+     *
+     * @param candidate the object to find, possibly null
+     * @return whether the FIFO sequence contains the object
+     */
+    @Override
+    public boolean contains(final Object candidate) {
+        if (getClass() != CircularFifoQueue.class) {
+            return super.contains(candidate);
+        }
+        int cursor = start;
+        boolean first = full;
+        while (first || cursor != end) {
+            first = false;
+            final E element = elements[cursor];
+            cursor = increment(cursor);
+            if (candidate == null ? element == null : candidate.equals(element)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Copies the live ring spans in FIFO order into an API-owned array.
      *
      * @param array The destination array.
@@ -410,6 +441,44 @@ public class CircularFifoQueue<E> extends AbstractCollection<E>
         } else {
             end = size;
         }
+    }
+
+    /**
+     * Removes the first matching ring element without allocating an iterator.
+     *
+     * <p>The physical cursor and the removal path reproduce the inherited
+     * AbstractCollection iterator algorithm, including candidate-equals
+     * callback timing, the head fast path, and contiguous suffix shifts.
+     * Subclasses retain their iterator-based removal contract.</p>
+     *
+     * @param candidate the value to remove, possibly null
+     * @return true if a matching element was found
+     */
+    @Override
+    public boolean remove(final Object candidate) {
+        if (getClass() != CircularFifoQueue.class) {
+            return super.remove(candidate);
+        }
+        int cursor = start;
+        boolean first = full;
+        while (first || cursor != end) {
+            first = false;
+            final int returned = cursor;
+            cursor = increment(cursor);
+            final E element = elements[returned];
+            if (candidate == null ? element == null : candidate.equals(element)) {
+                if (returned == start) {
+                    remove();
+                } else {
+                    shiftSuffixTowardRemovedSlot(returned);
+                    end = decrement(end);
+                    elements[end] = null;
+                    full = false;
+                }
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
