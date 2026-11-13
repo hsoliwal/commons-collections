@@ -327,6 +327,17 @@ class CircularFifoQueueArrayStorageTest {
         } catch (final NoSuchMethodException stillInherited) {
             // The pre-optimization baseline is valid too.
         }
+        final Method inheritedRemove = original.getMethod("remove", Object.class);
+        assertEquals(AbstractCollection.class, inheritedRemove.getDeclaringClass(),
+                "frozen inherited single-argument removal owner");
+        try {
+            final Method implementation = current.getDeclaredMethod("remove", Object.class);
+            assertEquals(methodSignature(inheritedRemove), methodSignature(implementation),
+                    "remove(Object) override must preserve its exact inherited declaration");
+            result.remove(implementation.toGenericString());
+        } catch (final NoSuchMethodException stillInherited) {
+            // The pre-optimization baseline is valid too.
+        }
         return result;
     }
 
