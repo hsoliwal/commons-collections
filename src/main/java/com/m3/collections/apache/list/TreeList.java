@@ -17,6 +17,7 @@
 // Modified 2026 by Hitesh Soliwal and Contributors to the Synexia Project:
 // array slot/index/mask lowering of the existing ranked, threaded AVL algorithm.
 // Modified 2026 by Hitesh Soliwal and Synexia contributors: iterative ranked and extremal slot traversal.
+// Modified 2026 by Hitesh Soliwal and Synexia contributors: nonrecursive threaded indexOf.
 package com.m3.collections.apache.list;
 
 import java.util.AbstractList;
@@ -278,18 +279,26 @@ public class TreeList<E> extends AbstractList<E> {
             return (state[slot] & LEFT_PREVIOUS) != 0 || left[slot] == NONE ? left[slot] : max(left[slot]);
         }
 
+        /**
+         * Scan the existing threaded AVL slots in encounter order. This uses
+         * primitive slot offsets instead of recursive Java stack frames, and
+         * retains the incumbent stored-value-first equality callback order.
+         */
         private int indexOf(final int slot, final Object object, final int index) {
-            if (leftSubTree(slot) != NONE) {
-                final int found = indexOf(left[slot], object, index + relativePosition[left[slot]]);
-                if (found != -1) {
-                    return found;
+            int cursor = slot;
+            int position = index;
+            while (leftSubTree(cursor) != NONE) {
+                cursor = left[cursor];
+                position += relativePosition[cursor];
+            }
+            while (cursor != NONE) {
+                if (Objects.equals(values[cursor], object)) {
+                    return position;
                 }
+                cursor = next(cursor);
+                position++;
             }
-            if (Objects.equals(values[slot], object)) {
-                return index;
-            }
-            return rightSubTree(slot) == NONE ? -1
-                    : indexOf(right[slot], object, index + relativePosition[right[slot]]);
+            return -1;
         }
 
         private void toArray(final int slot, final Object[] array, final int index) {
