@@ -72,7 +72,21 @@ jobs:
               if not line or line.startswith('#'):
                   continue
               target,before_hash,after_hash=line.split('\t')
-              assert hashlib.sha256(Path(target).read_bytes()).hexdigest()==after_hash,target
+              # Preserve the 2026-10-19 receipt as historical evidence.
+              # Later exact-owner optimizations supersede only these two current
+              # postimages. Validate their new Git blob seals separately.
+              current_blobs = {
+                  'src/main/java/com/m3/collections/apache/queue/CircularFifoQueue.java':
+                      '4ea29f98cf9083849a8eb26147559c9e9f680523',
+                  'src/test/java/com/m3/collections/apache/queue/CircularFifoQueueArrayStorageTest.java':
+                      '7ff10eb9c742ae81e72539926d26eda317505f92',
+              }
+              if target in current_blobs:
+                  actual_blob = subprocess.check_output(
+                      ['git', 'hash-object', target], text=True).strip()
+                  assert actual_blob == current_blobs[target],target
+              else:
+                  assert hashlib.sha256(Path(target).read_bytes()).hexdigest()==after_hash,target
               if before_hash != 'ABSENT':
                   before=subprocess.check_output(['git','show',predecessor+':'+target])
                   assert hashlib.sha256(before).hexdigest()==before_hash,target
