@@ -165,6 +165,37 @@ public class CircularFifoQueue<E> extends AbstractCollection<E>
     }
 
     /**
+     * Checks the live ring in iterator order without constructing an iterator.
+     *
+     * <p>The local cursor deliberately follows the existing iterator's
+     * full-ring and dynamic-end rules. In particular, the candidate's
+     * {@code equals} method runs after advancing the local cursor, so a
+     * reentrant modification has the same subsequent traversal behavior as
+     * the inherited {@link AbstractCollection#contains(Object)}.
+     * Subclasses retain inherited dispatch through their own iterators.</p>
+     *
+     * @param candidate the object to find, possibly null
+     * @return whether the FIFO sequence contains the object
+     */
+    @Override
+    public boolean contains(final Object candidate) {
+        if (getClass() != CircularFifoQueue.class) {
+            return super.contains(candidate);
+        }
+        int cursor = start;
+        boolean first = full;
+        while (first || cursor != end) {
+            first = false;
+            final E element = elements[cursor];
+            cursor = increment(cursor);
+            if (candidate == null ? element == null : candidate.equals(element)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Copies the live ring spans in FIFO order into an API-owned array.
      *
      * @param array The destination array.
