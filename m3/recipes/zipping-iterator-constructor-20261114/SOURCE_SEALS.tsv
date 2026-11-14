@@ -1,2 +1,16 @@
+# Copyright 2026 Hitesh Soliwal and Contributors to the Synexia Project.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 path	before_sha256	after_sha256	before_git_blob	after_git_blob	admission
 src/main/java/com/m3/collections/apache/iterators/ZippingIterator.java	0968beaf8030ed0a7cff6022cdc38c91086725dd8d530984c34fb25e382a0378	92cb2391b7428ee70ba095fa6d7664fae30461003bf49c73301e838fa917f069	aa4a2661f1b402d2cbc045fbec6287cb7d1e1a35	e4693e3b3bff354a3893f0c49bc28e15db5866bc	CANDIDATE_ONLY_HOLD

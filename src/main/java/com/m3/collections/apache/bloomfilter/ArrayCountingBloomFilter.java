@@ -17,6 +17,7 @@
 // Modified 2026-11-13 by Hitesh Soliwal and Synexia contributors: maintain positive-cell cardinality and export directly.
 // Modified 2026-11-13 by Hitesh Soliwal and Synexia contributors: indexed nonzero masks for sparse traversal.
 // Modified 2026-11-13 by Hitesh Soliwal and Synexia contributors: detached bitmap export from parent-owned word mask.
+// Modified 2026-11-14 by Hitesh Soliwal and Synexia contributors: wordwise bitmap containment.
 package com.m3.collections.apache.bloomfilter;
 
 import java.util.Arrays;
@@ -242,7 +243,30 @@ public final class ArrayCountingBloomFilter implements CountingBloomFilter {
 
     @Override
     public boolean contains(final BitMapExtractor bitMapExtractor) {
-        return contains(IndexExtractor.fromBitMapExtractor(bitMapExtractor));
+        Objects.requireNonNull(bitMapExtractor, "bitMapExtractor");
+        return bitMapExtractor.processBitMaps(new LongPredicate() {
+            private int bitIndex;
+
+            @Override
+            public boolean test(final long word) {
+                if (word != 0L) {
+                    final int mapIndex = bitIndex >>> 6;
+                    final long present = bitIndex >= 0 && mapIndex < nonzeroMask.length
+                            ? nonzeroMask[mapIndex] : 0L;
+                    final long missing = word & ~present;
+                    if (missing != 0L) {
+                        // The first absent bit decides false versus an out-of-bounds
+                        // exception, including partial tail words and index wraparound.
+                        // Retain the cell access so its exception matches the old path.
+                        return cells[bitIndex + Long.numberOfTrailingZeros(missing)] != 0;
+                    }
+                }
+                // A producer may ignore false and call this predicate again. Advance
+                // only after a successful word, exactly as the index adapter does.
+                bitIndex += Long.SIZE;
+                return true;
+            }
+        });
     }
 
     @Override
