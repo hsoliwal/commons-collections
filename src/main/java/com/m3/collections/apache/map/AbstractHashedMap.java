@@ -696,18 +696,15 @@ public class AbstractHashedMap<K, V> extends AbstractMap<K, V> implements Iterab
      * @return The normalized new capacity
      */
     protected int calculateNewCapacity(final int proposedCapacity) {
-        int newCapacity = 1;
-        if (proposedCapacity > MAXIMUM_CAPACITY) {
-            newCapacity = MAXIMUM_CAPACITY;
-        } else {
-            while (newCapacity < proposedCapacity) {
-                newCapacity <<= 1;  // multiply by two
-            }
-            if (newCapacity > MAXIMUM_CAPACITY) {
-                newCapacity = MAXIMUM_CAPACITY;
-            }
+        // The table stays a power of two. Bound before subtracting so that
+        // negative/zero capacities and the 2^30 ceiling retain their behavior.
+        if (proposedCapacity <= 1) {
+            return 1;
         }
-        return newCapacity;
+        if (proposedCapacity >= MAXIMUM_CAPACITY) {
+            return MAXIMUM_CAPACITY;
+        }
+        return Integer.highestOneBit(proposedCapacity - 1) << 1;
     }
 
     /**
@@ -745,7 +742,12 @@ public class AbstractHashedMap<K, V> extends AbstractMap<K, V> implements Iterab
     public void clear() {
         modCount++;
         final HashEntry<K, V>[] data = this.data;
-        Arrays.fill(data, null);
+        // An empty map already has no occupied bucket heads. Preserve the
+        // legacy null-storage failure of an uninitialized deserialization
+        // instance, and always invalidate pre-existing iterators via modCount.
+        if (size != 0 || data == null) {
+            Arrays.fill(data, null);
+        }
         size = 0;
     }
 

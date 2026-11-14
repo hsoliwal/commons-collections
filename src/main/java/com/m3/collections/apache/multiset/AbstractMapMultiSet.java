@@ -546,9 +546,14 @@ public abstract class AbstractMapMultiSet<E> extends AbstractMultiSet<E> {
         int i = 0;
         for (final Map.Entry<E, MutableInteger> entry : map.entrySet()) {
             final E current = entry.getKey();
-            final MutableInteger count = entry.getValue();
-            for (int index = count.value; index > 0; index--) {
-                result[i++] = current;
+            final int count = entry.getValue().value;
+            if (count >= 8 && count <= result.length - i) {
+                java.util.Arrays.fill(result, i, i + count, current);
+                i += count;
+            } else {
+                for (int index = count; index > 0; index--) {
+                    result[i++] = current;
+                }
             }
         }
         return result;
@@ -576,17 +581,20 @@ public abstract class AbstractMapMultiSet<E> extends AbstractMultiSet<E> {
         int i = 0;
         for (final Map.Entry<E, MutableInteger> entry : map.entrySet()) {
             final E current = entry.getKey();
-            final MutableInteger count = entry.getValue();
-            for (int index = count.value; index > 0; index--) {
-                // unsafe, will throw ArrayStoreException if types are not compatible, see Javadoc
-                @SuppressWarnings("unchecked")
-                final T unchecked = (T) current;
-                array[i++] = unchecked;
+            final int count = entry.getValue().value;
+            if (count >= 8 && count <= array.length - i) {
+                java.util.Arrays.fill(array, i, i + count, current);
+                i += count;
+            } else {
+                for (int index = count; index > 0; index--) {
+                    // Retain the original partial destination writes on an invalid count.
+                    @SuppressWarnings("unchecked")
+                    final T unchecked = (T) current;
+                    array[i++] = unchecked;
+                }
             }
         }
-        while (i < array.length) {
-            array[i++] = null;
-        }
+        java.util.Arrays.fill(array, i, array.length, null);
         return array;
     }
 

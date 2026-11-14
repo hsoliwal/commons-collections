@@ -1,0 +1,56 @@
+# SPDX-License-Identifier: Apache-2.0
+name: Commons CircularFifoQueue owned full-overwrite (Java 8 API on JDK 21)
+
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/com/m3/collections/apache/queue/CircularFifoQueue.java'
+      - 'src/test/java/com/m3/collections/apache/queue/CircularFifoQueueFullOverwriteTest.java'
+      - 'src/test/java/com/m3/collections/apache/queue/CircularFifoQueueBulkArrayTest.java'
+      - '.github/workflows/commons-fifo-full-overwrite-20261113.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fifo-owned-overwrite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout unchanged Commons fork and exact source
+        uses: actions/checkout@v4
+      - name: Install Java 21 for original Java 8 source floor
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Prove exact source candidate and no additional public descriptor
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE=src/main/java/com/m3/collections/apache/queue/CircularFifoQueue.java
+          test "$(git hash-object "$SOURCE")" = "0dbf5dacd07e8766e143320e0a0cf2467c071c00"
+          test "$(sha256sum "$SOURCE" | cut -d ' ' -f1)" = "680028128301661914479c1090bb2001691a5560ddad036118801eada545645d"
+          mkdir -p target/owned-fifo-source-proof
+          javac --release 8 -proc:none -Xlint:all,-options,-this-escape -Werror \
+            -d target/owned-fifo-source-proof \
+            src/main/java/com/m3/collections/apache/BoundedCollection.java \
+            "$SOURCE"
+          javap -public -s -classpath target/owned-fifo-source-proof \
+            com.m3.collections.apache.queue.CircularFifoQueue > target/owned-fifo-source-proof/api.txt
+      - name: Run actual Commons Maven JUnit regression (not optional)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mvn -B -ntp -Dmaven.compiler.testRelease=21 -Dtest=CircularFifoQueueFullOverwriteTest,CircularFifoQueueBulkArrayTest,CircularFifoQueueContainsHotPathTest,CircularFifoQueueRemoveHotPathTest test
+      - name: Publish reports even when native tests fail
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: commons-circular-fifo-full-overwrite
+          path: |
+            target/surefire-reports/
+            target/owned-fifo-source-proof/
+          if-no-files-found: warn

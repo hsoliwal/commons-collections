@@ -550,8 +550,14 @@ public abstract class AbstractMapBag<E> implements Bag<E> {
         final Object[] result = new Object[size()];
         int i = 0;
         for (final E current : map.keySet()) {
-            for (int index = getCount(current); index > 0; index--) {
-                result[i++] = current;
+            final int count = getCount(current);
+            if (count >= 8 && count <= result.length - i) {
+                java.util.Arrays.fill(result, i, i + count, current);
+                i += count;
+            } else {
+                for (int index = count; index > 0; index--) {
+                    result[i++] = current;
+                }
             }
         }
         return result;
@@ -580,16 +586,21 @@ public abstract class AbstractMapBag<E> implements Bag<E> {
 
         int i = 0;
         for (final E current : map.keySet()) {
-            for (int index = getCount(current); index > 0; index--) {
-                // unsafe, will throw ArrayStoreException if types are not compatible, see Javadoc
-                @SuppressWarnings("unchecked")
-                final T unchecked = (T) current;
-                array[i++] = unchecked;
+            final int count = getCount(current);
+            if (count >= 8 && count <= array.length - i) {
+                // Object[] arrayfill preserves runtime ArrayStoreException for typed arrays.
+                java.util.Arrays.fill(array, i, i + count, current);
+                i += count;
+            } else {
+                for (int index = count; index > 0; index--) {
+                    // Retain original partial writes on oversized subclass counts.
+                    @SuppressWarnings("unchecked")
+                    final T unchecked = (T) current;
+                    array[i++] = unchecked;
+                }
             }
         }
-        while (i < array.length) {
-            array[i++] = null;
-        }
+        java.util.Arrays.fill(array, i, array.length, null);
         return array;
     }
 

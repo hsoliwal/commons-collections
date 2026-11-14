@@ -1,15 +1,24 @@
 /*
- * Copyright 2026 Hitesh Soliwal and Contributors to the Synexia Project.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- * https://www.apache.org/licenses/LICENSE-2.0
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      https://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/*
+ * Copyright 2026 Hitesh Soliwal and Contributors to the Synexia Project.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+// Modified 2026 by Hitesh Soliwal and contributors: qualify exact inherited overrides without widening the API.
 package com.m3.collections.apache.queue;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -26,9 +35,13 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.ObjectStreamClass;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.nio.file.Path;
+import java.util.AbstractCollection;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Queue;
@@ -249,7 +262,25 @@ class CircularFifoQueueArrayStorageTest {
     @Test
     void publicProtectedAndSerializedSurfacesAreUnchanged() throws Exception {
         final Class<?> original = oracle.originalClass("queue.CircularFifoQueue");
-        assertEquals(surface(original), surface(CircularFifoQueue.class));
+        assertEquals(surface(original),
+                declaredSurfaceWithExactArrayOverrides(original, CircularFifoQueue.class));
+        assertEquals(effectiveSurface(original), effectiveSurface(CircularFifoQueue.class));
+        assertEquals(original.getModifiers(), CircularFifoQueue.class.getModifiers(), "class modifiers");
+        assertEquals(Arrays.toString(original.getGenericInterfaces()),
+                Arrays.toString(CircularFifoQueue.class.getGenericInterfaces()));
+        assertEquals(original.getGenericSuperclass().getTypeName(),
+                CircularFifoQueue.class.getGenericSuperclass().getTypeName());
+        final TreeSet<String> originalFields = new TreeSet<>();
+        final TreeSet<String> currentFields = new TreeSet<>();
+        Arrays.stream(original.getDeclaredFields())
+                .forEach(field -> originalFields.add(field.toGenericString()));
+        Arrays.stream(CircularFifoQueue.class.getDeclaredFields())
+                .filter(field -> !isJacocoDataField(field))
+                .forEach(field -> originalFields.add(field.toGenericString()));
+        Arrays.stream(CircularFifoQueue.class.getDeclaredFields())
+                .filter(field -> !isJacocoDataField(field))
+                .forEach(field -> currentFields.add(field.toGenericString()));
+        assertEquals(originalFields, currentFields, "all declared storage fields, including transient fields");
         assertEquals(ObjectStreamClass.lookup(original).getSerialVersionUID(),
                 ObjectStreamClass.lookup(CircularFifoQueue.class).getSerialVersionUID());
         assertEquals(Arrays.toString(ObjectStreamClass.lookup(original).getFields()),
@@ -273,6 +304,64 @@ class CircularFifoQueueArrayStorageTest {
         }) {
             return (Queue<?>) input.readObject();
         }
+    }
+
+    /**
+     * Preserve every old declaration and allow only exact implementations of the
+     * two operations that the frozen preimage already inherits from AbstractCollection.
+     * five operations that the frozen preimage already inherits from AbstractCollection.
+     * The declarations remain optional so this gate also accepts the unchanged baseline.
+     */
+    private static TreeSet<String> declaredSurfaceWithExactArrayOverrides(final Class<?> original,
+            final Class<?> current) throws Exception {
+        final TreeSet<String> result = surface(current);
+        for (final Class<?>[] parameters : new Class<?>[][] {new Class<?>[0], {Object[].class}}) {
+            final Method inherited = original.getMethod("toArray", parameters);
+            assertEquals(AbstractCollection.class, inherited.getDeclaringClass(), "frozen inherited owner");
+            final Method implementation;
+            try {
+                implementation = current.getDeclaredMethod("toArray", parameters);
+            } catch (final NoSuchMethodException stillInherited) {
+                continue;
+            }
+            assertEquals(methodSignature(inherited), methodSignature(implementation),
+                    "override must preserve modifiers, generic signature and declared exceptions");
+            result.remove(implementation.toGenericString());
+        }
+        return result;
+    }
+
+    /** Normalize only a method's declaring-owner spelling, never its generic or throws surface. */
+    private static String methodSignature(final Method method) {
+        final String declaration = method.toGenericString();
+        final String owner = method.getDeclaringClass().getName() + ".";
+        final int start = declaration.indexOf(owner + method.getName() + "(");
+        if (start < 0) {
+            throw new AssertionError("missing declaring owner in " + declaration);
+        }
+        return declaration.substring(0, start) + declaration.substring(start + owner.length());
+    }
+
+    /** All callable public and inherited protected signatures, with overriding resolved by erased parameters. */
+    private static TreeSet<String> effectiveSurface(final Class<?> type) {
+        final TreeSet<String> result = new TreeSet<>();
+        Arrays.stream(type.getMethods()).forEach(method -> result.add(methodSignature(method)));
+        final HashSet<String> hidden = new HashSet<>();
+        for (Class<?> owner = type; owner != null; owner = owner.getSuperclass()) {
+            final HashSet<String> declaredHere = new HashSet<>();
+            for (final Method method : owner.getDeclaredMethods()) {
+                final int modifiers = method.getModifiers();
+                if (Modifier.isPublic(modifiers) || Modifier.isProtected(modifiers)) {
+                    final String key = method.getName() + Arrays.toString(method.getParameterTypes());
+                    if (Modifier.isProtected(modifiers) && !hidden.contains(key)) {
+                        result.add(methodSignature(method));
+                    }
+                    declaredHere.add(key);
+                }
+            }
+            hidden.addAll(declaredHere);
+        }
+        return result;
     }
 
     private static TreeSet<String> surface(final Class<?> type) {

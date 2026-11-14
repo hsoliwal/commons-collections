@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: Apache-2.0
+type: specs.openrewrite.org/v1beta/recipe
+name: com.synexia.m3.collections.ZippingOwnedConstructorArray20261114
+displayName: Avoid duplicate array copy for two/three iterator Zip constructors
+description: >-
+  Source-sealed candidate only. Snapshot caller-supplied varargs arrays, but
+  privately created two/three-iterator arrays are already exclusive.
+recipeList:
+  - org.openrewrite.text.FindAndReplace:
+      find: "    public ZippingIterator(final Iterator<? extends E>... iterators) {\n        final int length = iterators.length;\n        this.iterators = iterators.clone();"
+      replace: "    public ZippingIterator(final Iterator<? extends E>... iterators) {\n        this(iterators, true);\n    }\n\n    /**\n     * Caller-owned varargs are copied; privately created two/three-argument\n     * arrays are already exclusively owned and need not be copied again.\n     */\n    private ZippingIterator(final Iterator<? extends E>[] iterators,\n                            final boolean snapshotCallerArray) {\n        final int length = iterators.length;\n        this.iterators = snapshotCallerArray ? iterators.clone() : iterators;"
+      filePattern: "**/ZippingIterator.java"
+      caseSensitive: true
+  - org.openrewrite.text.FindAndReplace:
+      find: "this(new Iterator[] {a, b});"
+      replace: "this(new Iterator[] {a, b}, false);"
+      filePattern: "**/ZippingIterator.java"
+      caseSensitive: true
+  - org.openrewrite.text.FindAndReplace:
+      find: "this(new Iterator[] {a, b, c});"
+      replace: "this(new Iterator[] {a, b, c}, false);"
+      filePattern: "**/ZippingIterator.java"
+      caseSensitive: true
