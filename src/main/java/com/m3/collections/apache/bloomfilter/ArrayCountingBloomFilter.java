@@ -16,6 +16,7 @@
  */
 // Modified 2026-11-13 by Hitesh Soliwal and Synexia contributors: maintain positive-cell cardinality and export directly.
 // Modified 2026-11-13 by Hitesh Soliwal and Synexia contributors: indexed nonzero masks for sparse traversal.
+// Modified 2026-11-13 by Hitesh Soliwal and Synexia contributors: detached bitmap export from parent-owned word mask.
 package com.m3.collections.apache.bloomfilter;
 
 import java.util.Arrays;
@@ -166,13 +167,40 @@ public final class ArrayCountingBloomFilter implements CountingBloomFilter {
         }
     }
 
+    /**
+     * Export a detached copy of the already maintained nonzero-cell bitmap.
+     * The mask includes positive and negative cells, even when the filter's
+     * permanent invalid-state flag is set. The parent keeps mask ownership.
+     */
+    @Override
+    public long[] asBitMapArray() {
+        return nonzeroMask.clone();
+    }
+
     @Override
     public int[] asIndexArray() {
         final int[] indices = new int[cardinality()];
         int offset = 0;
-        for (int i = 0; i < cells.length; i++) {
-            if (cells[i] > 0) {
-                indices[offset++] = i;
+        if (nonzeroCount > cells.length / 4) {
+            // Dense arrays retain the original direct primitive scan.
+            for (int i = 0; i < cells.length; i++) {
+                if (cells[i] > 0) {
+                    indices[offset++] = i;
+                }
+            }
+        } else {
+            // Sparse arrays reuse the already maintained occupancy words.
+            // Negative cells remain masked but are excluded from this
+            // positive-only index export, exactly as in the original loop.
+            for (int word = 0; word < nonzeroMask.length; word++) {
+                long remaining = nonzeroMask[word];
+                while (remaining != 0L) {
+                    final int index = (word << 6) + Long.numberOfTrailingZeros(remaining);
+                    if (cells[index] > 0) {
+                        indices[offset++] = index;
+                    }
+                    remaining &= remaining - 1L;
+                }
             }
         }
         return indices;
@@ -190,8 +218,24 @@ public final class ArrayCountingBloomFilter implements CountingBloomFilter {
 
     @Override
     public void clear() {
-        Arrays.fill(cells, 0);
-        Arrays.fill(nonzeroMask, 0L);
+        if (nonzeroCount > cells.length / Long.SIZE) {
+            // Retain bulk zeroing for densely occupied counter arrays.
+            Arrays.fill(cells, 0);
+            Arrays.fill(nonzeroMask, 0L);
+        } else if (nonzeroCount != 0) {
+            // The mask includes negative cells; positive cardinality does not.
+            for (int word = 0; word < nonzeroMask.length; word++) {
+                long remaining = nonzeroMask[word];
+                if (remaining != 0L) {
+                    do {
+                        cells[(word << 6) + Long.numberOfTrailingZeros(remaining)] = 0;
+                        remaining &= remaining - 1L;
+                    } while (remaining != 0L);
+                    nonzeroMask[word] = 0L;
+                }
+            }
+        }
+        // Deliberately retain the permanent invalid-state history.
         cardinality = 0;
         nonzeroCount = 0;
     }

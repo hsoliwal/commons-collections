@@ -34,18 +34,26 @@ import java.util.Objects;
  */
 public class ZippingIterator<E> implements Iterator<E> {
 
-    /** Snapshot of the child iterator slots, in caller order. */
+    /** The child iterators, indexed by stable slots. Exhausted slots are cleared. */
     private final Iterator<? extends E>[] iterators;
 
-    /** Primitive circular links for the still-live iterator slots. */
-    private final int[] successor;
-    private final int[] predecessor;
+    /** The next live slot in the circular chain. */
+    private final int[] nextIndices;
 
-    /** Next live slot to inspect, or -1 when all children are exhausted. */
-    private int cursor;
+    /** The next slot to probe. */
+    private int currentIndex;
 
-    /** Number of live children in the circular index lanes. */
-    private int live;
+    /** The live predecessor of the next slot to probe. */
+    private int previousIndex;
+
+    /** The number of child slots still in the circular chain. */
+    private int remaining;
+
+    /** The last examined slot, also shared by reentrant child callbacks. */
+    private int lastExaminedIndex = -1;
+
+    /** The predecessor of the last examined slot. */
+    private int lastExaminedPredecessor;
 
     /** The next iterator to use for next(). */
     private Iterator<? extends E> nextIterator;
@@ -61,16 +69,15 @@ public class ZippingIterator<E> implements Iterator<E> {
      * @throws NullPointerException if any iterator is null
      */
     public ZippingIterator(final Iterator<? extends E>... iterators) {
+        final int length = iterators.length;
         this.iterators = iterators.clone();
-        this.successor = new int[iterators.length];
-        this.predecessor = new int[iterators.length];
-        for (int i = 0; i < iterators.length; i++) {
+        nextIndices = new int[length];
+        for (int i = 0; i < length; i++) {
             Objects.requireNonNull(this.iterators[i], "iterator");
-            this.successor[i] = i + 1 == iterators.length ? 0 : i + 1;
-            this.predecessor[i] = i == 0 ? iterators.length - 1 : i - 1;
+            nextIndices[i] = i + 1 == length ? 0 : i + 1;
         }
-        this.live = iterators.length;
-        this.cursor = iterators.length == 0 ? -1 : 0;
+        remaining = length;
+        previousIndex = length - 1;
     }
 
     /**
@@ -115,25 +122,26 @@ public class ZippingIterator<E> implements Iterator<E> {
             return true;
         }
 
-        while (live > 0) {
-            final int index = cursor;
-            cursor = successor[index];
-            final Iterator<? extends E> childIterator = iterators[index];
+        while (remaining != 0) {
+            final Iterator<? extends E> childIterator = iterators[currentIndex];
+            lastExaminedIndex = currentIndex;
+            lastExaminedPredecessor = previousIndex;
+            // Advance before invoking user code, including when hasNext() throws.
+            currentIndex = nextIndices[currentIndex];
+            previousIndex = lastExaminedIndex;
             if (childIterator.hasNext()) {
                 nextIterator = childIterator;
                 return true;
             }
-            // Unlink the exhausted slot in O(1), without shifting a list.
-            if (live == 1) {
-                cursor = -1;
-            } else {
-                final int before = predecessor[index];
-                final int after = successor[index];
-                successor[before] = after;
-                predecessor[after] = before;
+            // Match the shared cursor's remove state after a reentrant callback.
+            if (lastExaminedIndex == -1) {
+                throw new IllegalStateException();
             }
-            iterators[index] = null; // release exhausted child, preserve lastReturned
-            live--;
+            nextIndices[lastExaminedPredecessor] = currentIndex;
+            previousIndex = lastExaminedPredecessor;
+            iterators[lastExaminedIndex] = null;
+            lastExaminedIndex = -1;
+            remaining--;
         }
         return false;
     }
