@@ -69,8 +69,17 @@ public class ZippingIterator<E> implements Iterator<E> {
      * @throws NullPointerException if any iterator is null
      */
     public ZippingIterator(final Iterator<? extends E>... iterators) {
+        this(iterators, true);
+    }
+
+    /**
+     * Caller-owned varargs are copied; privately created two/three-argument
+     * arrays are already exclusively owned and need not be copied again.
+     */
+    private ZippingIterator(final Iterator<? extends E>[] iterators,
+                            final boolean snapshotCallerArray) {
         final int length = iterators.length;
-        this.iterators = iterators.clone();
+        this.iterators = snapshotCallerArray ? iterators.clone() : iterators;
         nextIndices = new int[length];
         for (int i = 0; i < length; i++) {
             Objects.requireNonNull(this.iterators[i], "iterator");
@@ -90,7 +99,7 @@ public class ZippingIterator<E> implements Iterator<E> {
      */
     @SuppressWarnings("unchecked")
     public ZippingIterator(final Iterator<? extends E> a, final Iterator<? extends E> b) {
-        this(new Iterator[] {a, b});
+        this(new Iterator[] {a, b}, false);
     }
 
     /**
@@ -106,7 +115,7 @@ public class ZippingIterator<E> implements Iterator<E> {
     public ZippingIterator(final Iterator<? extends E> a,
                            final Iterator<? extends E> b,
                            final Iterator<? extends E> c) {
-        this(new Iterator[] {a, b, c});
+        this(new Iterator[] {a, b, c}, false);
     }
 
     /**
