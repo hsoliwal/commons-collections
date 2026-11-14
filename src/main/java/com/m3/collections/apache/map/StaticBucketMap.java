@@ -15,9 +15,9 @@
  * limitations under the License.
  */
 // Modified 2026 by Hitesh Soliwal and contributors: segmented array-owned mappings.
+// Modified 2026-11-14: page-bounded entry projections and projection-free key snapshots.
 package com.m3.collections.apache.map;
 
-import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
 import java.util.AbstractCollection;
 import java.util.AbstractSet;
@@ -229,13 +229,52 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
 
     }
 
-    private final class KeyIterator extends BaseIterator implements Iterator<K> {
+    /** Key snapshots need neither live value projections nor entry identity. */
+    private final class KeyIterator implements Iterator<K> {
+        private final ArrayList<K> current = new ArrayList<>();
+        private int bucket;
+        private K last;
+        private boolean removable;
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public boolean hasNext() {
+            if (!current.isEmpty()) {
+                return true;
+            }
+            while (bucket < buckets.length) {
+                synchronized (locks[bucket]) {
+                    for (int slot = buckets[bucket]; slot != NONE; slot = arena.next(slot)) {
+                        current.add((K) arena.key(slot));
+                    }
+                    bucket++;
+                    if (!current.isEmpty()) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
 
         @Override
         public K next() {
-            return nextEntry().getKey();
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            last = current.remove(current.size() - 1);
+            removable = true;
+            return last;
         }
 
+        @Override
+        public void remove() {
+            if (!removable) {
+                throw new IllegalStateException();
+            }
+            StaticBucketMap.this.remove(last);
+            last = null;
+            removable = false;
+        }
     }
 
     private final class KeySet extends AbstractSet<K> {
@@ -299,29 +338,25 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
     private static final class Segment {
         final Object[] data = new Object[Arena.PAGE_SIZE * 2];
         final long[] links = new long[Arena.PAGE_SIZE];
-        volatile EntryReference[] projections;
-        ReferenceQueue<Node<?, ?>> collected;
+        volatile WeakReference<Projection> projections;
 
-        void drain() {
-            if (collected != null) {
-                EntryReference reference;
-                while ((reference = (EntryReference) collected.poll()) != null) {
-                    if (projections[reference.offset] == reference) {
-                        projections[reference.offset] = null;
-                    }
-                }
-            }
+        Projection projection() {
+            final WeakReference<Projection> reference = projections;
+            return reference == null ? null : reference.get();
         }
     }
 
-    /** A weak identity registration exists only after an entry has been exposed. */
-    private static final class EntryReference extends WeakReference<Node<?, ?>> {
-        final int offset;
+    /**
+     * One weak registration per exposed storage page, not per mapping.
+     * A live public entry keeps its page's projections alive. Removed entries
+     * are unlinked immediately and no longer retain this page or its siblings.
+     */
+    private static final class Projection {
+        final Arena arena;
+        final Node<?, ?>[] entries = new Node<?, ?>[Arena.PAGE_SIZE];
 
-        EntryReference(final Node<?, ?> node, final ReferenceQueue<Node<?, ?>> queue,
-                final int offset) {
-            super(node, queue);
-            this.offset = offset;
+        Projection(final Arena arena) {
+            this.arena = arena;
         }
     }
 
@@ -431,31 +466,25 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
         }
 
         Node<?, ?> projected(final int slot) {
-            final EntryReference[] references = page(slot).projections;
-            if (references == null) {
-                return null;
-            }
-            final EntryReference reference = references[slot & PAGE_MASK];
-            return reference == null ? null : reference.get();
+            final Projection projection = page(slot).projection();
+            return projection == null ? null : projection.entries[slot & PAGE_MASK];
         }
 
         Node<?, ?> entry(final int slot) {
             final Segment page = page(slot);
             synchronized (page) {
-                if (page.projections == null) {
-                    // Publish both support objects only after allocation succeeds.
-                    final EntryReference[] references = new EntryReference[PAGE_SIZE];
-                    final ReferenceQueue<Node<?, ?>> queue = new ReferenceQueue<>();
-                    page.collected = queue;
-                    page.projections = references;
+                Projection projection = page.projection();
+                if (projection == null) {
+                    // Allocate before publication; an exposed Node roots this
+                    // group, but the map retains only its single weak reference.
+                    projection = new Projection(this);
+                    page.projections = new WeakReference<>(projection);
                 }
-                page.drain();
                 final int offset = slot & PAGE_MASK;
-                final EntryReference reference = page.projections[offset];
-                Node<?, ?> node = reference == null ? null : reference.get();
+                Node<?, ?> node = projection.entries[offset];
                 if (node == null) {
-                    node = new Node<>(key(slot), rawValue(slot), this, slot);
-                    page.projections[offset] = new EntryReference(node, page.collected, offset);
+                    node = new Node<>(key(slot), rawValue(slot), projection, slot);
+                    projection.entries[offset] = node;
                 }
                 return node;
             }
@@ -500,7 +529,8 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
                 }
                 final Segment page = page(slot);
                 final int offset = slot & PAGE_MASK;
-                final Node<?, ?> node = projected(slot);
+                final Projection projection = page.projection();
+                final Node<?, ?> node = projection == null ? null : projection.entries[offset];
                 if (node != null) {
                     synchronized (this) {
                         node.detachedValue(rawValue(slot));
@@ -509,10 +539,10 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
                 }
                 page.data[offset * 2] = null;
                 page.data[offset * 2 + 1] = null;
-                synchronized (page) {
-                    if (page.projections != null) {
-                        page.projections[offset] = null;
-                        page.drain();
+                if (projection != null) {
+                    synchronized (page) {
+                        // Never let a held sibling retain a removed mapping.
+                        projection.entries[offset] = null;
                     }
                 }
                 page.links[offset] = ((long) lock.free << 32) | 0xffffffffL;
@@ -526,10 +556,10 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
     private static final class Node<K, V> implements Map.Entry<K, V>, KeyValue<K, V> {
         private final K key;
         private volatile V value;
-        private volatile Arena owner;
+        private volatile Projection owner;
         private final int slot;
 
-        Node(final K key, final V value, final Arena owner, final int slot) {
+        Node(final K key, final V value, final Projection owner, final int slot) {
             this.key = key;
             this.value = value;
             this.owner = owner;
@@ -572,17 +602,17 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
 
         @Override
         public V setValue(final V replacement) {
-            final Arena current = owner;
+            final Projection current = owner;
             if (current == null) {
                 final V previous = value;
                 value = replacement;
                 return previous;
             }
-            synchronized (current) {
+            synchronized (current.arena) {
                 final V previous = value;
                 value = replacement;
                 if (owner != null) {
-                    current.page(slot).data[(slot & Arena.PAGE_MASK) * 2 + 1] = replacement;
+                    current.arena.page(slot).data[(slot & Arena.PAGE_MASK) * 2 + 1] = replacement;
                 }
                 return previous;
             }
