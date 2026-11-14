@@ -1,8 +1,0 @@
-problem_category	original_representative	candidate	decision	contract_and_provenance
-BOUNDED_FIFO_ARRAY	Apache Commons Collections CircularFifoQueue.java (fork 2d985c27e07bdcbb9516aea44b0dda3f3e487ced)	Exact source+package relocation	RELOCATE_FIRST	Apache-2.0 donor copyright, original class remains intact; JDK Queue/BoundedCollection, ring offset and serialization source preserved
-BOUNDED_COLLECTION_API	Apache BoundedCollection<E>	Exact package relocation	RELOCATE_FIRST	Retain original public names/signatures, no binary original-class substitutability
-M3_PRODUCT_BACKEND	M3CircularFifoQueue existing com.m3.collections.apache	Compare later, never install duplicate competing production owner	REUSE	Existing M3 bit-state queue is product; fork is staging oracle
-LEETCODE_622	Circular queue operations	Category only	REFERENCE_ONLY	No submission/editorial copied
-HACKERRANK_QUEUE	Queue operations / ring buffers	Category only	REFERENCE_ONLY	No challenge solutions copied
-GEEKSFORGEEKS_CIRCULAR_QUEUE	Array index wrap and modulo	Category only	REFERENCE_ONLY	No article implementation copied
-SPRING_FORK	No hsoliwal/spring-framework fork found	Reuse existing M3 Spring module	DEFER	Do not invent fork or silently substitute repository

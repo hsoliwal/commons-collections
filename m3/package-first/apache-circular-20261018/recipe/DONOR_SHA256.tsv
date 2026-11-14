@@ -1,7 +1,0 @@
-# SPDX-License-Identifier: Apache-2.0
-# Original Apache Commons Collections source fork: hsoliwal/commons-collections
-# Fork commit: 2d985c27e07bdcbb9516aea44b0dda3f3e487ced
-# Upstream: apache/commons-collections
-# File	Original package	M3 package	Git blob	SHA256 original	SHA256 relocated	Allowed transformation
-BoundedCollection.java	org.apache.commons.collections4	com.m3.collections.apache	fcf229139f56b27637815cd5dad94fb0539ab25b	22aebf6e2649df119b224589b5629752580016c046338dca534e1be51ca3e4c7	7c3d1d0595eb4a9029c185b0ca9092caf221538c81e02318bf3ddb968126e690	package only
-CircularFifoQueue.java	org.apache.commons.collections4.queue	com.m3.collections.apache.queue	6bfdebe3f24f1d6cac0705d309f81ffc9c277c51	d455d399425c40e2c98c8dab0f6d6b2de58b0df3225cecd1f212f13d5173da1e	a93526672443ce20662aa44b528e90d1b739e30ed9b33078e1ff3473f64f1e97	package plus BoundedCollection import only

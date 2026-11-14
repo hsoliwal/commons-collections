@@ -1,8 +1,0 @@
-Exact original and canonical generated output hashes
-PASS pinned original owners and genuine original-versus-relocated oracle; bodies unchanged
-m3/package-first/apache-circular-20261018/recipe/BoundedCollection.java.txt: OK
-m3/package-first/apache-circular-20261018/recipe/CircularFifoQueue.java.txt: OK
-m3/package-first/apache-circular-20261018/recipe/M3ApacheCircularFifoRelocationProof.java.txt: OK
-
-Compile actual original plus relocated Java21 owners
-PASS M3_APACHE_PACKAGE_RELOCATION checks=65711
