@@ -44,7 +44,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mvn -B -ntp -Dtest=CircularFifoQueueFullOverwriteTest,CircularFifoQueueBulkArrayTest,CircularFifoQueueContainsHotPathTest,CircularFifoQueueRemoveHotPathTest test
+          mvn -B -ntp -Dmaven.compiler.testRelease=21 -Dtest=CircularFifoQueueFullOverwriteTest,CircularFifoQueueBulkArrayTest,CircularFifoQueueContainsHotPathTest,CircularFifoQueueRemoveHotPathTest test
       - name: Publish reports even when native tests fail
         if: always()
         uses: actions/upload-artifact@v4

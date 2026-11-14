@@ -50,9 +50,9 @@ jobs:
           mvn -B -ntp -DskipTests compile
       - name: Require all native fork array-owner JUnit classes
         run: |
-          mvn -B -ntp -Dtest=TreeListThreadedIndexLookupTest,TreeListTypedArrayTest,CircularFifoQueueFullOverwriteTest,CircularFifoQueueContainsHotPathTest,CircularFifoQueueRemoveHotPathTest,ArrayCountingBloomFilterMaskTest,ArrayCountingBloomFilterMaskExportTest,BitmapHotPathTest,MapBagSpanArrayExportTest,MapMultiSetSpanArrayExportTest,ArrayListValuedHashMapEntryCursorTest,ArrayStackDirectSearchTest,StaticBucketArrayTest,AbstractHashedMapArrayHotPathTest,SetUniqueListBulkRemovalTest,CircularFifoQueueBulkArrayTest,M3ZippingIteratorIndexedRingTest,ZippingIteratorArrayStorageTest test
+          mvn -B -ntp -Dmaven.compiler.testRelease=21 -Dtest=TreeListThreadedIndexLookupTest,TreeListTypedArrayTest,CircularFifoQueueFullOverwriteTest,CircularFifoQueueContainsHotPathTest,CircularFifoQueueRemoveHotPathTest,ArrayCountingBloomFilterMaskTest,ArrayCountingBloomFilterMaskExportTest,BitmapHotPathTest,MapBagSpanArrayExportTest,MapMultiSetSpanArrayExportTest,ArrayListValuedHashMapEntryCursorTest,ArrayStackDirectSearchTest,StaticBucketArrayTest,AbstractHashedMapArrayHotPathTest,SetUniqueListBulkRemovalTest,CircularFifoQueueBulkArrayTest,M3ZippingIteratorIndexedRingTest,ZippingIteratorArrayStorageTest test
       - name: Full original Commons Maven qualification
-        run: mvn -B -ntp verify
+        run: mvn -B -ntp -Dmaven.compiler.testRelease=21 verify
       - name: Provider source and API metadata validation
         run: |
           git diff --check "$(git merge-base HEAD origin/master)" HEAD

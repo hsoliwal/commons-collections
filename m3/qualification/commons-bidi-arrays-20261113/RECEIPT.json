@@ -1,0 +1,119 @@
+{
+  "schema": "SYNEXIA_COLLECTION_FORK_QUALIFICATION_V1",
+  "SPDX-License-Identifier": "Apache-2.0",
+  "SPDX-FileCopyrightText": "2026 Hitesh Soliwal and Contributors to the Synexia Project",
+  "kind": "passive executed-output receipt; no recipe implementation",
+  "target_repository": "hsoliwal/commons-collections",
+  "target_preimage": "f4f2b135ef904cc81b6f5a93915916ef13662513",
+  "semantic_and_measurement_baseline": "1c3d291123d3e991e982005c6bc1ee91dc682fad",
+  "canonical_repository": "hsoliwal/com.synexia",
+  "canonical_commit": "2efbc8d8daa2fb89590b98529b89528db1c17e46",
+  "canonical_commit_role": "Source-and-test qualification checkpoint; receipt delivery is qualified separately.",
+  "dataset": "synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/datasets/commons-bidi-readers-20261113",
+  "qualification": "synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/evidence/commons-bidi-readers-20261113",
+  "recipe": "com.synexia.m3jdk.CollectionsContractRefinement20261017",
+  "engine": "com.synexia.rewrite.M3HashPinnedJavaSnapshotRecipe",
+  "receipt_dataset": "synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/datasets/commons-bidi-receipt-v2-20261113",
+  "supersedes": {
+    "source_qualification_commit": "533471d06370c6d5aff552e8bb8196762e3d8753",
+    "receipt_sha256": "74b100af4c24d2555449164c285e87012ce9c283c1718cdd84da1f98543edb2b",
+    "reason": "Concurrent entry exposure could alias shared hash cells; the actual previous owner returned10320 for a stable entry whose required hash was10352."
+  },
+  "source_sdk_manifests": [
+    {
+      "path": "synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/evidence/commons-bidi-readers-20261113/sdk/SDK_INPUTS.tsv",
+      "sha256": "3cf76c4d6df7365f01b5ed6732ff0c75bc1e26cd54fef70abf0704b81901d4f4"
+    },
+    {
+      "path": "synexia-openrewrite-recipes/recipe-crates/m3-collections-contract-refinement-20261017/evidence/commons-bidi-readers-20261113/sdk/SDK_RESULTS.tsv",
+      "sha256": "1d87f0d049af7dc7f1dc985184adf6ac08f7e243e6a5b5e9b1c464f178e57da6"
+    }
+  ],
+  "outputs": [
+    {
+      "path": "src/main/java/com/m3/collections/apache/bidimap/TreeBidiMap.java",
+      "preimage_sha256": "66b721cd001f69087a2f6f9ea6a181f9c2a8f473febfee7ff14aacb7dd9d7b1b",
+      "sha256": "3b061da3cccc8a4251cd2daf4988ed48e8998f7cb2fd3385e16f626d5633ef22",
+      "git_blob": "be33c2e9cbb4c84791c513445748fddeb2493d2c"
+    },
+    {
+      "path": "src/test/java/com/m3/collections/apache/bidimap/TreeBidiMapArrayStorageTest.java",
+      "preimage_sha256": "32b2aa662b76bcdcfd9510c2f45a75c0e4ea1f47f19f07bcf73eeba7486f91e1",
+      "sha256": "ef00656217fdaa54a996f3df8e09fe2ef59138ec3fa1206af85927f9a9a1bada",
+      "git_blob": "8170f08a761283daba0ef865c1de164776f79afc"
+    }
+  ],
+  "change": "TreeBidiMap keeps dual red-black indexes in owner arrays. This successor serializes entry-cell allocation/publication, checks and publishes shared lazy hashes under the page monitor with user callbacks outside monitors, and publishes projection-local cached hashes through a volatile flag.",
+  "compatibility": {
+    "public_protected_declarations": "preserved",
+    "serialization": "Original UID/fields and exact fixture streams preserved.",
+    "entry_identity_delta": "Forward entry requests create fresh immutable caller-owned projections; key/value representatives remain unchanged.",
+    "lazy_hash_behavior": "Shared entry hash cache, uncached direct map.hashCode and finite same-cell reentrant last-completion order preserved.",
+    "concurrency_scope": "Stable-payload entry readers followed by joined/external synchronization before mutation; no new concurrent-writer or mutable-payload race guarantee.",
+    "java_source_target": 8,
+    "qualification_runtime": 21,
+    "java8_runtime_execution": "not performed"
+  },
+  "executed_source_checks": {
+    "native_functional": {
+      "tests": 22338,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 82,
+      "source_epoch": "exact final production and regression test"
+    },
+    "sdk": {
+      "junit": 45,
+      "python": 23,
+      "receiver_scenarios": 9,
+      "applied_outputs": 2,
+      "replay_changes": 0
+    },
+    "emitted_production_class_parity": 16,
+    "differential_checks": 1007566,
+    "scoped_checkstyle_violations": 0,
+    "new_regressions": {
+      "original_owner_pass": 3,
+      "final_owner_pass": 3,
+      "published_owner_negative": "expected stable entry hash 10352, observed 10320",
+      "first_completion_negative": "expected outer reentrant hash 11, observed nested hash 7"
+    }
+  },
+  "measurement": {
+    "method": "One fresh original/successor JVM pair, 180 raw samples and180 validated checksums, plus structural runs; standalone uncontended diagnostics, not JMH or contention throughput.",
+    "baseline": "1c3d291123d3e991e982005c6bc1ee91dc682fad",
+    "structural_definition": "Reachable Java structural bytes excluding key/value payloads and native monitor metadata; shared empty arrays are not exclusive per-map retained bytes.",
+    "mappings": 65536,
+    "before_entries": {
+      "baseline_bytes": 9437248,
+      "candidate_bytes": 2347824
+    },
+    "after_complete_entry_traversal": {
+      "baseline_bytes": 9437272,
+      "candidate_bytes": 3287776
+    },
+    "cpu_ratios_at_16384": {
+      "definition": "candidate/baseline, one pair of five-sample JVM medians",
+      "build": 0.71,
+      "lookup": 0.816,
+      "recycle": 0.81,
+      "map_iterator": 0.581,
+      "escaping_entry_traversal": 1.189,
+      "entry_hash_traversal": 1.626
+    },
+    "tradeoffs": "Larger empty/singleton footprint, fresh-entry allocation, slower small/medium lookups and slower entry/entry-hash traversal. Earlier three-pair results belong to the superseded source epoch."
+  },
+  "original_default_lifecycle": {
+    "status": "BLOCKED",
+    "observation": "Original RAT goal on the source-received tree, including its existing passive receipt, reports exactly the three historical files below. Receipt replacement receives a separate final RAT observation in canonical qualification.",
+    "unapproved_files": [
+      "m3scale/qualifications/m3-commons-predicated-bulk-capture-20261018/CATALOGUE.tsv",
+      "m3scale/qualifications/m3-commons-predicated-bulk-capture-20261018/README.md",
+      "m3scale/qualifications/m3-commons-predicated-bulk-capture-20261018/manifest.tsv"
+    ],
+    "skip_or_exclusions_added": false,
+    "full_default_lifecycle_pass": false
+  },
+  "disposition": "Qualified storage successor; draft while the historical original RAT/default-lifecycle hold and target integration checks remain unresolved.",
+  "whole_reactor_or_m3jdk_acceptance": false
+}
