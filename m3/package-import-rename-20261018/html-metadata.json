@@ -1,8 +1,0 @@
-[
-  {
-    "path": "src/main/javadoc/overview.html",
-    "old": "org.apache.commons.collections4",
-    "new": "com.m3.collections.apache",
-    "expected_sha256": "a7ffab948bd45d46cee609376a6efbe774f496703f6e74edd651d1abc6f61798"
-  }
-]
