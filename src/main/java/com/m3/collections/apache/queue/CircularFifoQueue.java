@@ -26,6 +26,7 @@ import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.lang.reflect.Array;
 import java.util.AbstractCollection;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
@@ -155,6 +156,63 @@ public class CircularFifoQueue<E> extends AbstractCollection<E>
             full = true;
         }
 
+        return true;
+    }
+
+    /**
+     * Bulk insert for an exact ArrayList source. The ring retains only its final
+     * capacity worth of elements, so an oversized batch need not write entries
+     * that would be immediately evicted. No temporary array is allocated.
+     *
+     * <p>All unknown collections and subclasses use the inherited iterator
+     * protocol. A null element preserves the original successful-prefix writes
+     * before the original exception, rather than claiming atomic failure.
+     * This class remains intentionally unsynchronized.</p>
+     *
+     * @param values elements to add, in encounter order
+     * @return true if at least one element was inserted
+     */
+    @Override
+    public boolean addAll(final Collection<? extends E> values) {
+        if (getClass() != CircularFifoQueue.class || values == null
+                || values.getClass() != ArrayList.class) {
+            return super.addAll(values);
+        }
+        final ArrayList<? extends E> input = (ArrayList<? extends E>) values;
+        final int count = input.size();
+        if (count == 0) {
+            return false;
+        }
+
+        // Preserve inherited addAll's partial mutation on the first null.
+        // The exact ArrayList.get implementation has no overridable callbacks.
+        for (int index = 0; index < count; index++) {
+            if (input.get(index) == null) {
+                for (int accepted = 0; accepted < index; accepted++) {
+                    add(input.get(accepted));
+                }
+                throw new NullPointerException("element");
+            }
+        }
+
+        // Recreate the *physical* ring positions of count serial add calls.
+        // Only the final min(count, capacity) writes can remain observable.
+        final int retained = Math.min(count, maxElements);
+        final int firstSource = count - retained;
+        int physical = (int) (((long) end + firstSource) % maxElements);
+        for (int index = firstSource; index < count; index++) {
+            elements[physical] = input.get(index);
+            if (++physical == maxElements) {
+                physical = 0;
+            }
+        }
+        final int nextEnd = (int) (((long) end + count) % maxElements);
+        final boolean saturated = count >= maxElements - size();
+        if (saturated) {
+            start = nextEnd;
+        }
+        end = nextEnd;
+        full = saturated;
         return true;
     }
 
