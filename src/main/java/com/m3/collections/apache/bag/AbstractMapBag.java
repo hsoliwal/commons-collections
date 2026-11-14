@@ -555,6 +555,13 @@ public abstract class AbstractMapBag<E> implements Bag<E> {
             if (count > 0) {
                 Arrays.fill(result, i, i + count, current);
                 i += count;
+            if (count >= 8 && count <= result.length - i) {
+                java.util.Arrays.fill(result, i, i + count, current);
+                i += count;
+            } else {
+                for (int index = count; index > 0; index--) {
+                    result[i++] = current;
+                }
             }
         }
         return result;
@@ -591,6 +598,20 @@ public abstract class AbstractMapBag<E> implements Bag<E> {
             }
         }
         Arrays.fill(array, i, array.length, null);
+            if (count >= 8 && count <= array.length - i) {
+                // Object[] arrayfill preserves runtime ArrayStoreException for typed arrays.
+                java.util.Arrays.fill(array, i, i + count, current);
+                i += count;
+            } else {
+                for (int index = count; index > 0; index--) {
+                    // Retain original partial writes on oversized subclass counts.
+                    @SuppressWarnings("unchecked")
+                    final T unchecked = (T) current;
+                    array[i++] = unchecked;
+                }
+            }
+        }
+        java.util.Arrays.fill(array, i, array.length, null);
         return array;
     }
 

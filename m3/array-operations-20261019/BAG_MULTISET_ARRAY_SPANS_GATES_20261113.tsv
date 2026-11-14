@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: Apache-2.0
+gate	status	evidence	next
+fork_base	PASS	hsoliwal/commons-collections@1c3d291123d3e991e982005c6bc1ee91dc682fad	refuse drift
+bag_before_blob	PASS	0533f34f26feaae4f912d1ab426edcb10470d6cb	verified source
+bag_after_blob	PASS	c67bf3bbe8f6d8c6b9c7aac17b7f4b9490cb6775	GitHub readback
+bag_before_sha256	PASS	7855a845d887a86dd2c0bcb2676dc2177bfb9e2b35f49300e0701baf49bae11e	SHA256
+bag_after_sha256	PASS	5693612ae0904a5a322d698a660c17c8e0c4abf64f137561b28a12907c62aa98	SHA256
+multiset_before_blob	PASS	3a6b8ea53295fdab5351f6e35948b4f454690040	verified source
+multiset_after_blob	PASS	35132c3cd8aa7a1d9bc914e42027592c9ae6883e	GitHub readback
+multiset_before_sha256	PASS	1afcac93b9db058248a6df50a5efece3473e6fdb13b465fbbe14fbe3a57bcb2c	SHA256
+multiset_after_sha256	PASS	5666afe0e5c2ad79f8b436932c3659dabc2b6bcca6a2ab0ce50aa6163872735b	SHA256
+source_scope	PASS	2 source files, each only toArray()/toArray(T[]) edited; no new retained storage	compile full project
+source_atom_javac	PASS	Java21 javac -Xlint:all -Werror two independent semantic witnesses	whole Commons Maven not compiled
+jit_oracle_bag	PASS	210000 array contents/typed exceptions/partial writes	fork JUnit
+jit_oracle_multiset	PASS	210000 array contents/typed exceptions/partial writes	fork JUnit
+interpreted_oracle_bag	PASS	210000 java -Xint differential checks	fork JUnit
+interpreted_oracle_multiset	PASS	210000 java -Xint differential checks	fork JUnit
+fork_owned_tests	COMMITTED	2 new JUnit5 classes with 4 test methods each	Maven reactor
+standalone_performance	MIXED	seven duplicate-heavy runs per family, significant variance incl regressions	JMH/full JVM profiler
+full_fork_Maven	NOT_RUN	mvn not installed, offline dependencies unavailable	native test/build/coverage
+full_fork_binary_abi	NOT_RUN	static descriptors unchanged; no compiled full class receipt	Maven javap/serialization
+default_branch	UNCHANGED	review branch only	PR merge requires external approval
