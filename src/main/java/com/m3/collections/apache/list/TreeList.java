@@ -20,6 +20,8 @@
 // Modified 2026 by Hitesh Soliwal and Synexia contributors: nonrecursive threaded indexOf.
 // Modified 2026 by Hitesh Soliwal and Synexia contributors: single-reservation bulk slot growth.
 // Modified 2026 by Hitesh Soliwal and contributors: bounded bulk rollback through initialized child links.
+// Modified 2026 by Hitesh Soliwal and Synexia contributors: single-pass removal and nonredundant AVL height updates.
+// Modified 2026 by Hitesh Soliwal and contributors: allocation-free reversed-spine AVL joins.
 package com.m3.collections.apache.list;
 
 import java.util.AbstractList;
@@ -462,9 +464,7 @@ public class TreeList<E> extends AbstractList<E> {
                     relativePosition[slot]--;
                 }
             }
-            final int result = balance(slot);
-            recalcHeight(slot);
-            return result;
+            return balance(slot);
         }
 
         private int remove(final int slot, final int index) {
@@ -483,7 +483,6 @@ public class TreeList<E> extends AbstractList<E> {
                     relativePosition[slot]--;
                 }
             }
-            recalcHeight(slot);
             return balance(slot);
         }
 
@@ -495,7 +494,6 @@ public class TreeList<E> extends AbstractList<E> {
             if (relativePosition[slot] < 0) {
                 relativePosition[slot]++;
             }
-            recalcHeight(slot);
             return balance(slot);
         }
 
@@ -507,7 +505,6 @@ public class TreeList<E> extends AbstractList<E> {
             if (relativePosition[slot] > 0) {
                 relativePosition[slot]--;
             }
-            recalcHeight(slot);
             return balance(slot);
         }
 
@@ -531,6 +528,7 @@ public class TreeList<E> extends AbstractList<E> {
                 detached = slot;
                 return right[slot];
             }
+            final Object removedValue = values[slot];
             if (heightRightMinusLeft(slot) > 0) {
                 final int successor = min(right[slot]);
                 values[slot] = values[successor];
@@ -557,6 +555,9 @@ public class TreeList<E> extends AbstractList<E> {
                     relativePosition[slot]--;
                 }
             }
+            // Carry the logical removal result in the existing detached slot.
+            // No caller observes it before releaseDetached clears the payload.
+            values[detached] = removedValue;
             recalcHeight(slot);
             return slot;
         }
@@ -576,11 +577,15 @@ public class TreeList<E> extends AbstractList<E> {
             detached = NONE;
         }
 
-        /** Height-matched AVL join from the original owner, using a primitive ancestor stack. */
-        private int addAll(final int root, int other, final int currentSize, final int[] ancestors) {
+        /**
+         * Height-matched AVL join with the traversed spine as its own ancestor stack.
+         * Reverse only the child lane being descended, then restore each link before
+         * balancing. No allocation or external callback occurs while links are reversed.
+         */
+        private int addAll(final int root, int other, final int currentSize) {
             final int maximum = max(root);
             final int otherMinimum = min(other);
-            int depth = 0;
+            int ancestor = NONE;
             if (height(other) > height(root)) {
                 final int leftTree = removeMax(root);
                 int subtree = other;
@@ -588,8 +593,10 @@ public class TreeList<E> extends AbstractList<E> {
                 int parentAbsolute = 0;
                 while (subtree != NONE && height(subtree) > height(leftTree)) {
                     parentAbsolute = absolute;
-                    ancestors[depth++] = subtree;
-                    subtree = left[subtree];
+                    final int child = left[subtree];
+                    left[subtree] = ancestor;
+                    ancestor = subtree;
+                    subtree = child;
                     if (subtree != NONE) {
                         absolute += relativePosition[subtree];
                     }
@@ -607,10 +614,11 @@ public class TreeList<E> extends AbstractList<E> {
                 relativePosition[maximum] = currentSize - 1 - parentAbsolute;
                 relativePosition[other] += currentSize;
                 subtree = maximum;
-                while (depth != 0) {
-                    final int ancestor = ancestors[--depth];
+                while (ancestor != NONE) {
+                    final int previous = left[ancestor];
                     setLeft(ancestor, subtree, NONE);
                     subtree = balance(ancestor);
+                    ancestor = previous;
                 }
                 detached = NONE;
                 return subtree;
@@ -621,8 +629,10 @@ public class TreeList<E> extends AbstractList<E> {
             int parentAbsolute = 0;
             while (subtree != NONE && height(subtree) > height(other)) {
                 parentAbsolute = absolute;
-                ancestors[depth++] = subtree;
-                subtree = right[subtree];
+                final int child = right[subtree];
+                right[subtree] = ancestor;
+                ancestor = subtree;
+                subtree = child;
                 if (subtree != NONE) {
                     absolute += relativePosition[subtree];
                 }
@@ -639,10 +649,11 @@ public class TreeList<E> extends AbstractList<E> {
             }
             relativePosition[otherMinimum] = currentSize - parentAbsolute;
             subtree = otherMinimum;
-            while (depth != 0) {
-                final int ancestor = ancestors[--depth];
+            while (ancestor != NONE) {
+                final int previous = right[ancestor];
                 setRight(ancestor, subtree, NONE);
                 subtree = balance(ancestor);
+                ancestor = previous;
             }
             detached = NONE;
             return subtree;
@@ -899,10 +910,8 @@ public class TreeList<E> extends AbstractList<E> {
             return false;
         }
         modCount += c.size();
-        // Allocate the bounded join scratch before a new subtree can own payload.
-        final int[] ancestors = new int[64];
         final int cTree = slots.build(c);
-        root = root == -1 ? cTree : slots.addAll(root, cTree, size, ancestors);
+        root = root == -1 ? cTree : slots.addAll(root, cTree, size);
         size += c.size();
         return true;
     }
@@ -1013,6 +1022,14 @@ public class TreeList<E> extends AbstractList<E> {
     public E remove(final int index) {
         checkInterval(index, 0, size() - 1);
         modCount++;
+        if (getClass() == TreeList.class) {
+            root = slots.remove(root, index);
+            final E result = slots.value(slots.detached);
+            slots.releaseDetached();
+            size--;
+            return result;
+        }
+        // Preserve subclass get() callbacks, including their return value and failures.
         final E result = get(index);
         root = slots.remove(root, index);
         slots.releaseDetached();
