@@ -20,6 +20,7 @@
 // Modified 2026 by Hitesh Soliwal and Synexia contributors: nonrecursive threaded indexOf.
 // Modified 2026 by Hitesh Soliwal and Synexia contributors: single-reservation bulk slot growth.
 // Modified 2026 by Hitesh Soliwal and contributors: bounded bulk rollback through initialized child links.
+// Modified 2026 by Hitesh Soliwal and Synexia contributors: single-pass removal and nonredundant AVL height updates.
 package com.m3.collections.apache.list;
 
 import java.util.AbstractList;
@@ -462,9 +463,7 @@ public class TreeList<E> extends AbstractList<E> {
                     relativePosition[slot]--;
                 }
             }
-            final int result = balance(slot);
-            recalcHeight(slot);
-            return result;
+            return balance(slot);
         }
 
         private int remove(final int slot, final int index) {
@@ -483,7 +482,6 @@ public class TreeList<E> extends AbstractList<E> {
                     relativePosition[slot]--;
                 }
             }
-            recalcHeight(slot);
             return balance(slot);
         }
 
@@ -495,7 +493,6 @@ public class TreeList<E> extends AbstractList<E> {
             if (relativePosition[slot] < 0) {
                 relativePosition[slot]++;
             }
-            recalcHeight(slot);
             return balance(slot);
         }
 
@@ -507,7 +504,6 @@ public class TreeList<E> extends AbstractList<E> {
             if (relativePosition[slot] > 0) {
                 relativePosition[slot]--;
             }
-            recalcHeight(slot);
             return balance(slot);
         }
 
@@ -531,6 +527,7 @@ public class TreeList<E> extends AbstractList<E> {
                 detached = slot;
                 return right[slot];
             }
+            final Object removedValue = values[slot];
             if (heightRightMinusLeft(slot) > 0) {
                 final int successor = min(right[slot]);
                 values[slot] = values[successor];
@@ -557,6 +554,9 @@ public class TreeList<E> extends AbstractList<E> {
                     relativePosition[slot]--;
                 }
             }
+            // Carry the logical removal result in the existing detached slot.
+            // No caller observes it before releaseDetached clears the payload.
+            values[detached] = removedValue;
             recalcHeight(slot);
             return slot;
         }
@@ -1013,6 +1013,14 @@ public class TreeList<E> extends AbstractList<E> {
     public E remove(final int index) {
         checkInterval(index, 0, size() - 1);
         modCount++;
+        if (getClass() == TreeList.class) {
+            root = slots.remove(root, index);
+            final E result = slots.value(slots.detached);
+            slots.releaseDetached();
+            size--;
+            return result;
+        }
+        // Preserve subclass get() callbacks, including their return value and failures.
         final E result = get(index);
         root = slots.remove(root, index);
         slots.releaseDetached();
