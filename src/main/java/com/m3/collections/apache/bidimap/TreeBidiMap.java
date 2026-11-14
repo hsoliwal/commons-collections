@@ -936,23 +936,83 @@ public class TreeBidiMap<K extends Comparable<K>, V extends Comparable<V>>
      * the map or payloads. A removed entry retains at most this bounded page.
      */
     private static final class HashPage {
-        private final int[] hashes = new int[8];
-        private int valid;
+        // Values remain independently published when an in-flight calculation finishes later.
+        private volatile int hash0;
+        private volatile int hash1;
+        private volatile int hash2;
+        private volatile int hash3;
+        private volatile int hash4;
+        private volatile int hash5;
+        private volatile int hash6;
+        private volatile int hash7;
+        private volatile int valid;
         private int allocated;
         private int liveSlots;
 
+        private int cachedHash(final int offset) {
+            switch (offset) {
+            case 0:
+                return hash0;
+            case 1:
+                return hash1;
+            case 2:
+                return hash2;
+            case 3:
+                return hash3;
+            case 4:
+                return hash4;
+            case 5:
+                return hash5;
+            case 6:
+                return hash6;
+            case 7:
+                return hash7;
+            default:
+                throw new ArrayIndexOutOfBoundsException(offset);
+            }
+        }
+
+        private void publishHash(final int offset, final int hash) {
+            switch (offset) {
+            case 0:
+                hash0 = hash;
+                break;
+            case 1:
+                hash1 = hash;
+                break;
+            case 2:
+                hash2 = hash;
+                break;
+            case 3:
+                hash3 = hash;
+                break;
+            case 4:
+                hash4 = hash;
+                break;
+            case 5:
+                hash5 = hash;
+                break;
+            case 6:
+                hash6 = hash;
+                break;
+            case 7:
+                hash7 = hash;
+                break;
+            default:
+                throw new ArrayIndexOutOfBoundsException(offset);
+            }
+        }
+
         private int hash(final int offset, final Object key, final Object value) {
             final int bit = 1 << offset;
-            synchronized (this) {
-                if ((valid & bit) != 0) {
-                    return hashes[offset];
-                }
+            if ((valid & bit) != 0) {
+                return cachedHash(offset);
             }
             // User callbacks run outside the page monitor, including reentrant callbacks.
             final int computed = key.hashCode() ^ value.hashCode();
             synchronized (this) {
-                // A reentrant calculation finishes before this one, as in the original entry.
-                hashes[offset] = computed;
+                // Always publish: a later outer completion supersedes its nested computation.
+                publishHash(offset, computed);
                 valid |= bit;
                 return computed;
             }
