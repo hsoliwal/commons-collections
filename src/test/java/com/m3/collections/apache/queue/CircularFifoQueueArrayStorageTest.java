@@ -273,8 +273,6 @@ class CircularFifoQueueArrayStorageTest {
         final TreeSet<String> originalFields = new TreeSet<>();
         final TreeSet<String> currentFields = new TreeSet<>();
         Arrays.stream(original.getDeclaredFields())
-                .forEach(field -> originalFields.add(field.toGenericString()));
-        Arrays.stream(CircularFifoQueue.class.getDeclaredFields())
                 .filter(field -> !isJacocoDataField(field))
                 .forEach(field -> originalFields.add(field.toGenericString()));
         Arrays.stream(CircularFifoQueue.class.getDeclaredFields())
@@ -285,6 +283,14 @@ class CircularFifoQueueArrayStorageTest {
                 ObjectStreamClass.lookup(CircularFifoQueue.class).getSerialVersionUID());
         assertEquals(Arrays.toString(ObjectStreamClass.lookup(original).getFields()),
                 Arrays.toString(ObjectStreamClass.lookup(CircularFifoQueue.class).getFields()));
+    }
+
+    /** JaCoCo's offline/agent probe array; never part of the original or current storage surface. */
+    private static boolean isJacocoDataField(final Field field) {
+        return field.isSynthetic() && "$jacocoData".equals(field.getName())
+                && field.getType() == boolean[].class
+                && (field.getModifiers() & Modifier.fieldModifiers())
+                        == (Modifier.PRIVATE | Modifier.STATIC | Modifier.TRANSIENT);
     }
 
     private static byte[] serialize(final Object value) throws Exception {
@@ -315,12 +321,20 @@ class CircularFifoQueueArrayStorageTest {
     private static TreeSet<String> declaredSurfaceWithExactArrayOverrides(final Class<?> original,
             final Class<?> current) throws Exception {
         final TreeSet<String> result = surface(current);
-        for (final Class<?>[] parameters : new Class<?>[][] {new Class<?>[0], {Object[].class}}) {
-            final Method inherited = original.getMethod("toArray", parameters);
+        // Exact AbstractCollection methods the fork overrides for ring-span exports, ring
+        // membership/removal and bulk-tail writes; every other declaration must stay original.
+        final Object[][] admitted = {
+            {"toArray", new Class<?>[0]}, {"toArray", new Class<?>[] {Object[].class}},
+            {"contains", new Class<?>[] {Object.class}}, {"remove", new Class<?>[] {Object.class}},
+            {"addAll", new Class<?>[] {java.util.Collection.class}}};
+        for (final Object[] entry : admitted) {
+            final String name = (String) entry[0];
+            final Class<?>[] parameters = (Class<?>[]) entry[1];
+            final Method inherited = original.getMethod(name, parameters);
             assertEquals(AbstractCollection.class, inherited.getDeclaringClass(), "frozen inherited owner");
             final Method implementation;
             try {
-                implementation = current.getDeclaredMethod("toArray", parameters);
+                implementation = current.getDeclaredMethod(name, parameters);
             } catch (final NoSuchMethodException stillInherited) {
                 continue;
             }
