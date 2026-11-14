@@ -10,6 +10,7 @@ on:
       - 'src/main/java/com/m3/collections/apache/multimap/AbstractMultiValuedMap.java'
       - 'src/main/java/com/m3/collections/apache/multiset/AbstractMapMultiSet.java'
       - 'src/main/java/com/m3/collections/apache/list/TreeList.java'
+      - 'src/main/java/com/m3/collections/apache/bidimap/TreeBidiMap.java'
       - 'src/main/java/com/m3/collections/apache/list/SetUniqueList.java'
       - 'src/main/java/com/m3/collections/apache/map/StaticBucketMap.java'
       - 'src/main/java/com/m3/collections/apache/map/AbstractHashedMap.java'
@@ -20,6 +21,8 @@ on:
       - 'src/test/java/com/m3/collections/apache/multimap/ArrayListValuedHashMapEntryCursorTest.java'
       - 'src/test/java/com/m3/collections/apache/multiset/MapMultiSetSpanArrayExportTest.java'
       - 'src/test/java/com/m3/collections/apache/list/TreeListThreadedIndexLookupTest.java'
+      - 'src/test/java/com/m3/collections/apache/list/TreeListBulk*.java'
+      - 'src/test/java/com/m3/collections/apache/bidimap/TreeBidiMap*.java'
       - 'src/test/java/com/m3/collections/apache/list/TreeListTypedArray*.java'
       - 'src/test/java/com/m3/collections/apache/list/SetUniqueListBulkRemovalTest.java'
       - 'src/test/java/com/m3/collections/apache/map/StaticBucketArray*.java'
@@ -50,7 +53,7 @@ jobs:
           mvn -B -ntp -DskipTests compile
       - name: Require all native fork array-owner JUnit classes
         run: |
-          mvn -B -ntp -Dmaven.compiler.testRelease=21 -Dtest=TreeListThreadedIndexLookupTest,TreeListTypedArrayTest,CircularFifoQueueFullOverwriteTest,CircularFifoQueueContainsHotPathTest,CircularFifoQueueRemoveHotPathTest,ArrayCountingBloomFilterMaskTest,ArrayCountingBloomFilterMaskExportTest,BitmapHotPathTest,MapBagSpanArrayExportTest,MapMultiSetSpanArrayExportTest,ArrayListValuedHashMapEntryCursorTest,ArrayStackDirectSearchTest,StaticBucketArrayTest,AbstractHashedMapArrayHotPathTest,SetUniqueListBulkRemovalTest,CircularFifoQueueBulkArrayTest,M3ZippingIteratorIndexedRingTest,ZippingIteratorArrayStorageTest test
+          mvn -B -ntp -Dmaven.compiler.testRelease=21 -Dtest=TreeListBulkCapacityTest,TreeListBulkRollbackTest,TreeBidiMapArrayStorageTest,TreeBidiMapHashPublicationTest,TreeListThreadedIndexLookupTest,TreeListTypedArrayTest,CircularFifoQueueFullOverwriteTest,CircularFifoQueueContainsHotPathTest,CircularFifoQueueRemoveHotPathTest,ArrayCountingBloomFilterMaskTest,ArrayCountingBloomFilterMaskExportTest,BitmapHotPathTest,MapBagSpanArrayExportTest,MapMultiSetSpanArrayExportTest,ArrayListValuedHashMapEntryCursorTest,ArrayStackDirectSearchTest,StaticBucketArrayTest,AbstractHashedMapArrayHotPathTest,SetUniqueListBulkRemovalTest,CircularFifoQueueBulkArrayTest,M3ZippingIteratorIndexedRingTest,ZippingIteratorArrayStorageTest test
       - name: Full original Commons Maven qualification
         run: mvn -B -ntp -Dmaven.compiler.testRelease=21 verify
       - name: Provider source and API metadata validation

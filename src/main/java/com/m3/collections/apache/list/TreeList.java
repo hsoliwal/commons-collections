@@ -19,6 +19,7 @@
 // Modified 2026 by Hitesh Soliwal and Synexia contributors: iterative ranked and extremal slot traversal.
 // Modified 2026 by Hitesh Soliwal and Synexia contributors: nonrecursive threaded indexOf.
 // Modified 2026 by Hitesh Soliwal and Synexia contributors: single-reservation bulk slot growth.
+// Modified 2026 by Hitesh Soliwal and contributors: bounded bulk rollback through initialized child links.
 package com.m3.collections.apache.list;
 
 import java.util.AbstractList;
@@ -26,7 +27,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.ConcurrentModificationException;
 import java.util.Iterator;
-import java.util.List;
 import java.util.ListIterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
@@ -153,25 +153,77 @@ public class TreeList<E> extends AbstractList<E> {
             return slot;
         }
 
-        /** Reuse slots while journaling this build's ownership for failure cleanup. */
+        /** Reuse initialized child links for large-build rollback ownership. */
         private int build(final Collection<? extends E> source) {
             final Iterator<? extends E> iterator = source.iterator();
             final int end = source.size() - 1;
-            final long journalLength = Math.max(1L, end + 1L) + 1L;
-            if (journalLength > Integer.MAX_VALUE - 8L) {
+            final long buildLength = Math.max(1L, end + 1L) + 1L;
+            if (buildLength > Integer.MAX_VALUE - 8L) {
                 throw new OutOfMemoryError("TreeList build capacity exhausted");
             }
-            // Cell zero is the initialized prefix length; remaining cells are slot IDs.
-            final int[] acquired = new int[(int) journalLength];
-            try {
-                return build(iterator, 0, end, 0, NONE, NONE, acquired);
-            } catch (final RuntimeException | Error failure) {
-                // Only this uncommitted subtree is released. Reversing acquisition
-                // restores the popped free-slot order without retaining partial input.
-                for (int index = acquired[0]; index > 0; index--) {
-                    releaseSlot(acquired[index]);
+            if (end < 8) {
+                // At most nine integers; retain the existing small-build path.
+                final int[] acquired = new int[(int) buildLength];
+                try {
+                    return build(iterator, 0, end, 0, NONE, NONE, acquired);
+                } catch (final RuntimeException | Error failure) {
+                    for (int index = acquired[0]; index > 0; index--) {
+                        releaseSlot(acquired[index]);
+                    }
+                    throw failure;
                 }
+            }
+            final int slot = acquireBuildSlot(NONE, NONE, (int) buildLength - 1);
+            try {
+                build(iterator, slot, 0, end, 0, (int) buildLength - 2);
+                return slot;
+            } catch (final RuntimeException | Error failure) {
+                // Acquisition is preorder; right/left/root restores its exact reverse.
+                releaseBuildTree(slot);
                 throw failure;
+            }
+        }
+
+        /** Initialize both threads before publishing an uncommitted child link. */
+        private int acquireBuildSlot(final int previous, final int next, final int remaining) {
+            final int slot = acquireSlot(remaining);
+            state[slot] = LEFT_PREVIOUS | RIGHT_NEXT | LIVE;
+            left[slot] = previous;
+            right[slot] = next;
+            return slot;
+        }
+
+        /** Carry the remaining acquisition count without a retained counter or journal. */
+        private void build(final Iterator<? extends E> iterator, final int slot,
+                final int start, final int end, final int parentPosition, int remaining) {
+            final int mid = start + (end - start) / 2;
+            if (start < mid) {
+                final int child = acquireBuildSlot(left[slot], slot, remaining);
+                left[slot] = child;
+                state[slot] &= ~LEFT_PREVIOUS;
+                build(iterator, child, start, mid - 1, mid, remaining - 1);
+                remaining -= mid - start;
+            }
+            final E value = iterator.next();
+            values[slot] = value;
+            relativePosition[slot] = mid - parentPosition;
+            if (mid < end) {
+                final int child = acquireBuildSlot(slot, right[slot], remaining);
+                right[slot] = child;
+                state[slot] &= ~RIGHT_NEXT;
+                build(iterator, child, mid + 1, end, mid, remaining - 1);
+            }
+            recalcHeight(slot);
+        }
+
+        /** Release only the uncommitted balanced subtree, never its thread targets. */
+        private void releaseBuildTree(final int slot) {
+            if (slot != NONE) {
+                final int leftChild = leftSubTree(slot);
+                final int rightChild = rightSubTree(slot);
+                releaseBuildTree(rightChild);
+                releaseBuildTree(leftChild);
+                releaseSlot(slot);
             }
         }
 
