@@ -10,6 +10,9 @@ on:
       - 'src/main/java/com/m3/collections/apache/multimap/AbstractMultiValuedMap.java'
       - 'src/main/java/com/m3/collections/apache/multiset/AbstractMapMultiSet.java'
       - 'src/main/java/com/m3/collections/apache/list/TreeList.java'
+      - 'src/main/java/com/m3/collections/apache/list/SetUniqueList.java'
+      - 'src/main/java/com/m3/collections/apache/map/StaticBucketMap.java'
+      - 'src/main/java/com/m3/collections/apache/map/AbstractHashedMap.java'
       - 'src/main/java/com/m3/collections/apache/queue/CircularFifoQueue.java'
       - 'src/test/java/com/m3/collections/apache/bloomfilter/**'
       - 'src/test/java/com/m3/collections/apache/ArrayStackDirectSearchTest.java'
@@ -18,7 +21,12 @@ on:
       - 'src/test/java/com/m3/collections/apache/multiset/MapMultiSetSpanArrayExportTest.java'
       - 'src/test/java/com/m3/collections/apache/list/TreeListThreadedIndexLookupTest.java'
       - 'src/test/java/com/m3/collections/apache/list/TreeListTypedArray*.java'
+      - 'src/test/java/com/m3/collections/apache/list/SetUniqueListBulkRemovalTest.java'
+      - 'src/test/java/com/m3/collections/apache/map/StaticBucketArray*.java'
+      - 'src/test/java/com/m3/collections/apache/map/AbstractHashedMapArrayHotPathTest.java'
+      - 'src/test/java/com/m3/collections/apache/iterators/M3ZippingIteratorIndexedRingTest.java'
       - 'src/test/java/com/m3/collections/apache/queue/CircularFifoQueueFullOverwriteTest.java'
+      - 'src/test/java/com/m3/collections/apache/queue/CircularFifoQueueBulkArrayTest.java'
   workflow_dispatch:
 permissions:
   contents: read
@@ -42,7 +50,9 @@ jobs:
           mvn -B -ntp -DskipTests compile
       - name: Require all native fork array-owner JUnit classes
         run: |
-          mvn -B -ntp -Dtest=TreeListThreadedIndexLookupTest,TreeListTypedArrayTest,CircularFifoQueueFullOverwriteTest,CircularFifoQueueContainsHotPathTest,CircularFifoQueueRemoveHotPathTest,ArrayCountingBloomFilterMaskTest,ArrayCountingBloomFilterMaskExportTest,BitmapHotPathTest,MapBagSpanArrayExportTest,MapMultiSetSpanArrayExportTest,ArrayListValuedHashMapEntryCursorTest,ArrayStackDirectSearchTest test
+          mvn -B -ntp -Dtest=TreeListThreadedIndexLookupTest,TreeListTypedArrayTest,CircularFifoQueueFullOverwriteTest,CircularFifoQueueContainsHotPathTest,CircularFifoQueueRemoveHotPathTest,ArrayCountingBloomFilterMaskTest,ArrayCountingBloomFilterMaskExportTest,BitmapHotPathTest,MapBagSpanArrayExportTest,MapMultiSetSpanArrayExportTest,ArrayListValuedHashMapEntryCursorTest,ArrayStackDirectSearchTest,StaticBucketArrayTest,AbstractHashedMapArrayHotPathTest,SetUniqueListBulkRemovalTest,CircularFifoQueueBulkArrayTest,M3ZippingIteratorIndexedRingTest,ZippingIteratorArrayStorageTest test
+      - name: Full original Commons Maven qualification
+        run: mvn -B -ntp verify
       - name: Provider source and API metadata validation
         run: |
           git diff --check "$(git merge-base HEAD origin/master)" HEAD

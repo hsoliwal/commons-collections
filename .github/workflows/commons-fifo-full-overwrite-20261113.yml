@@ -6,6 +6,7 @@ on:
     paths:
       - 'src/main/java/com/m3/collections/apache/queue/CircularFifoQueue.java'
       - 'src/test/java/com/m3/collections/apache/queue/CircularFifoQueueFullOverwriteTest.java'
+      - 'src/test/java/com/m3/collections/apache/queue/CircularFifoQueueBulkArrayTest.java'
       - '.github/workflows/commons-fifo-full-overwrite-20261113.yml'
   workflow_dispatch:
 
@@ -30,8 +31,8 @@ jobs:
         run: |
           set -euo pipefail
           SOURCE=src/main/java/com/m3/collections/apache/queue/CircularFifoQueue.java
-          test "$(git hash-object "$SOURCE")" = "0c0f82ee416ae96d4bcb7ece9c0d75d2b9f3a1d1"
-          test "$(sha256sum "$SOURCE" | cut -d ' ' -f1)" = "01d81c13cc6ddccb0b04f37ec5a6c3528ab16cbb36854bc941e978ebc9d822e3"
+          test "$(git hash-object "$SOURCE")" = "0dbf5dacd07e8766e143320e0a0cf2467c071c00"
+          test "$(sha256sum "$SOURCE" | cut -d ' ' -f1)" = "680028128301661914479c1090bb2001691a5560ddad036118801eada545645d"
           mkdir -p target/owned-fifo-source-proof
           javac --release 8 -proc:none -Xlint:all,-options,-this-escape -Werror \
             -d target/owned-fifo-source-proof \
@@ -43,7 +44,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mvn -B -ntp -Dtest=CircularFifoQueueFullOverwriteTest test
+          mvn -B -ntp -Dtest=CircularFifoQueueFullOverwriteTest,CircularFifoQueueBulkArrayTest,CircularFifoQueueContainsHotPathTest,CircularFifoQueueRemoveHotPathTest test
       - name: Publish reports even when native tests fail
         if: always()
         uses: actions/upload-artifact@v4
