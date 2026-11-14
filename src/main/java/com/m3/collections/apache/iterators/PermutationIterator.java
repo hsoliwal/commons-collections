@@ -16,6 +16,7 @@
  */
 // Modified 2026 by Hitesh Soliwal and Contributors to the Synexia Project:
 // parent-owned payload array decoded by the existing permutation keys.
+// Modified 2026 by Hitesh Soliwal and Synexia contributors: cached mobile key and bulk snapshot copying.
 package com.m3.collections.apache.iterators;
 
 import java.util.ArrayList;
@@ -70,6 +71,12 @@ public class PermutationIterator<E> implements Iterator<List<E>> {
     private List<E> nextPermutation;
 
     /**
+     * Low 31 bits cache the largest key's position; MAX_VALUE disables the cache.
+     * The sign bit marks a next result decoded from the current keys.
+     */
+    private int permutationState = Integer.MAX_VALUE;
+
+    /**
      * Standard constructor for this class.
      *
      * @param collection  The collection to generate permutations for
@@ -88,6 +95,9 @@ public class PermutationIterator<E> implements Iterator<List<E>> {
             value++;
         }
         nextPermutation = new ArrayList<>(collection);
+        if (keys.length != 0 && value - 1 == keys.length && keys.length == direction.length) {
+            permutationState = keys.length - 1;
+        }
     }
 
     /**
@@ -120,6 +130,9 @@ public class PermutationIterator<E> implements Iterator<List<E>> {
      */
     @Override
     public List<E> next() {
+        if (keys.length >= 4) {
+            return nextLarge();
+        }
         if (!hasNext()) {
             throw new NoSuchElementException();
         }
@@ -161,6 +174,87 @@ public class PermutationIterator<E> implements Iterator<List<E>> {
         }
         final List<E> result = nextPermutation;
         nextPermutation = nextP;
+        return result;
+    }
+
+    /** Use cached ordinal state and bulk copies when the input is large enough. */
+    private List<E> nextLarge() {
+        if (!hasNext()) {
+            throw new NoSuchElementException();
+        }
+
+        // find the largest mobile integer k
+        int indexOfLargestMobileInteger = -1;
+        int largestKey = -1;
+        final int largestIndex = permutationState & Integer.MAX_VALUE;
+        if (largestIndex < keys.length && (direction[largestIndex]
+                ? largestIndex < keys.length - 1 : largestIndex > 0)) {
+            // The largest key is mobile whenever it does not face an end.
+            indexOfLargestMobileInteger = largestIndex;
+            largestKey = keys[largestIndex];
+        } else {
+            for (int i = 0; i < keys.length; i++) {
+                if (direction[i] && i < keys.length - 1 && keys[i] > keys[i + 1] ||
+                    !direction[i] && i > 0 && keys[i] > keys[i - 1]) {
+                    if (keys[i] > largestKey) { // NOPMD
+                        largestKey = keys[i];
+                        indexOfLargestMobileInteger = i;
+                    }
+                }
+            }
+        }
+        if (largestKey == -1) {
+            final List<E> toReturn = nextPermutation;
+            nextPermutation = null;
+            return toReturn;
+        }
+
+        // swap k and the adjacent integer it is looking at
+        final int offset = direction[indexOfLargestMobileInteger] ? 1 : -1;
+        final int tmpKey = keys[indexOfLargestMobileInteger];
+        keys[indexOfLargestMobileInteger] = keys[indexOfLargestMobileInteger + offset];
+        keys[indexOfLargestMobileInteger + offset] = tmpKey;
+        final boolean tmpDirection = direction[indexOfLargestMobileInteger];
+        direction[indexOfLargestMobileInteger] = direction[indexOfLargestMobileInteger + offset];
+        direction[indexOfLargestMobileInteger + offset] = tmpDirection;
+
+        final boolean copyPrevious = permutationState < 0;
+        // Clear the canonical flag before allocation so a failed call is replayable.
+        permutationState = largestIndex;
+        if (largestIndex == indexOfLargestMobileInteger) {
+            permutationState += offset;
+        } else if (largestIndex == indexOfLargestMobileInteger + offset) {
+            permutationState = indexOfLargestMobileInteger;
+        }
+        final List<E> nextP;
+        if (copyPrevious) {
+            // This ArrayList has never escaped to a caller. Copy its backing
+            // values in bulk, then update only the two adjacent changed slots.
+            nextP = new ArrayList<>(nextPermutation);
+            nextP.set(indexOfLargestMobileInteger, elementAtKey(keys[indexOfLargestMobileInteger]));
+            nextP.set(indexOfLargestMobileInteger + offset,
+                    elementAtKey(keys[indexOfLargestMobileInteger + offset]));
+            if (largestKey != keys.length) {
+                for (int i = 0; i < keys.length; i++) {
+                    if (keys[i] > largestKey) {
+                        direction[i] = !direction[i];
+                    }
+                }
+            }
+        } else {
+            // Keep the first build's ordinal decoding: collection.toArray()
+            // need not have returned the same image as collection.iterator().
+            nextP = new ArrayList<>(keys.length);
+            for (int i = 0; i < keys.length; i++) {
+                if (keys[i] > largestKey) {
+                    direction[i] = !direction[i];
+                }
+                nextP.add(elementAtKey(keys[i]));
+            }
+        }
+        final List<E> result = nextPermutation;
+        nextPermutation = nextP;
+        permutationState |= Integer.MIN_VALUE;
         return result;
     }
 
