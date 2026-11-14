@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+// Modified 2026-11-13 by Hitesh Soliwal and Synexia contributors: direct array/bitmap hot paths.
 package com.m3.collections.apache.bloomfilter;
 
 import java.util.Arrays;
@@ -47,13 +48,13 @@ public interface IndexExtractor {
 
                 @Override
                 public boolean test(long word) {
-                    int i = wordIdx;
+                    final int base = wordIdx;
                     while (word != 0) {
-                        if ((word & 1) == 1 && !consumer.test(i)) {
+                        // Visit only enabled bits; keep this word's snapshot across callbacks.
+                        if (!consumer.test(base + Long.numberOfTrailingZeros(word))) {
                             return false;
                         }
-                        word >>>= 1;
-                        i++;
+                        word &= word - 1;
                     }
                     wordIdx += 64;
                     return true;

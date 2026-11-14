@@ -16,13 +16,9 @@
  */
 package com.m3.collections.apache.iterators;
 
-import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
-
-import com.m3.collections.apache.FluentIterable;
 
 /**
  * Provides an interleaved iteration over the elements contained in a
@@ -38,8 +34,26 @@ import com.m3.collections.apache.FluentIterable;
  */
 public class ZippingIterator<E> implements Iterator<E> {
 
-    /** The {@link Iterator}s to evaluate. */
-    private final Iterator<Iterator<? extends E>> iterators;
+    /** The child iterators, indexed by stable slots. Exhausted slots are cleared. */
+    private final Iterator<? extends E>[] iterators;
+
+    /** The next live slot in the circular chain. */
+    private final int[] nextIndices;
+
+    /** The next slot to probe. */
+    private int currentIndex;
+
+    /** The live predecessor of the next slot to probe. */
+    private int previousIndex;
+
+    /** The number of child slots still in the circular chain. */
+    private int remaining;
+
+    /** The last examined slot, also shared by reentrant child callbacks. */
+    private int lastExaminedIndex = -1;
+
+    /** The predecessor of the last examined slot. */
+    private int lastExaminedPredecessor;
 
     /** The next iterator to use for next(). */
     private Iterator<? extends E> nextIterator;
@@ -55,13 +69,24 @@ public class ZippingIterator<E> implements Iterator<E> {
      * @throws NullPointerException if any iterator is null
      */
     public ZippingIterator(final Iterator<? extends E>... iterators) {
-        // create a mutable list to be able to remove exhausted iterators
-        final List<Iterator<? extends E>> list = new ArrayList<>();
-        for (final Iterator<? extends E> iterator : iterators) {
-            Objects.requireNonNull(iterator, "iterator");
-            list.add(iterator);
+        this(iterators, true);
+    }
+
+    /**
+     * Caller-owned varargs are copied; privately created two/three-argument
+     * arrays are already exclusively owned and need not be copied again.
+     */
+    private ZippingIterator(final Iterator<? extends E>[] iterators,
+                            final boolean snapshotCallerArray) {
+        final int length = iterators.length;
+        this.iterators = snapshotCallerArray ? iterators.clone() : iterators;
+        nextIndices = new int[length];
+        for (int i = 0; i < length; i++) {
+            Objects.requireNonNull(this.iterators[i], "iterator");
+            nextIndices[i] = i + 1 == length ? 0 : i + 1;
         }
-        this.iterators = FluentIterable.of(list).loop().iterator();
+        remaining = length;
+        previousIndex = length - 1;
     }
 
     /**
@@ -74,7 +99,7 @@ public class ZippingIterator<E> implements Iterator<E> {
      */
     @SuppressWarnings("unchecked")
     public ZippingIterator(final Iterator<? extends E> a, final Iterator<? extends E> b) {
-        this(new Iterator[] {a, b});
+        this(new Iterator[] {a, b}, false);
     }
 
     /**
@@ -90,7 +115,7 @@ public class ZippingIterator<E> implements Iterator<E> {
     public ZippingIterator(final Iterator<? extends E> a,
                            final Iterator<? extends E> b,
                            final Iterator<? extends E> c) {
-        this(new Iterator[] {a, b, c});
+        this(new Iterator[] {a, b, c}, false);
     }
 
     /**
@@ -106,14 +131,26 @@ public class ZippingIterator<E> implements Iterator<E> {
             return true;
         }
 
-        while (iterators.hasNext()) {
-            final Iterator<? extends E> childIterator = iterators.next();
+        while (remaining != 0) {
+            final Iterator<? extends E> childIterator = iterators[currentIndex];
+            lastExaminedIndex = currentIndex;
+            lastExaminedPredecessor = previousIndex;
+            // Advance before invoking user code, including when hasNext() throws.
+            currentIndex = nextIndices[currentIndex];
+            previousIndex = lastExaminedIndex;
             if (childIterator.hasNext()) {
                 nextIterator = childIterator;
                 return true;
             }
-            // iterator is exhausted, remove it
-            iterators.remove();
+            // Match the shared cursor's remove state after a reentrant callback.
+            if (lastExaminedIndex == -1) {
+                throw new IllegalStateException();
+            }
+            nextIndices[lastExaminedPredecessor] = currentIndex;
+            previousIndex = lastExaminedPredecessor;
+            iterators[lastExaminedIndex] = null;
+            lastExaminedIndex = -1;
+            remaining--;
         }
         return false;
     }
