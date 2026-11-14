@@ -22,4 +22,19 @@ class StaticBucketArrayTest {
     void entryCallbacksDoNotIntroduceCrossBucketDeadlocks() throws Exception {
         StaticBucketEntryConcurrency.main(new String[0]);
     }
+
+    @Test
+    void keyTraversalDoesNotMaterializeEntryProjections() throws Exception {
+        StaticBucketProjectionContract.keyTraversalDoesNotExposeEntries();
+    }
+
+    @Test
+    void entryRegistrationsAreBoundedByStoragePages() throws Exception {
+        StaticBucketProjectionContract.registrationsArePageBounded();
+    }
+
+    @Test
+    void preservesProjectionIdentityDetachmentAndRecycling() throws Exception {
+        StaticBucketProjectionContract.verifyBehavior();
+    }
 }
