@@ -25,6 +25,7 @@
 // Modified 2026 by Hitesh Soliwal and contributors: array-backed linear bulk range removal.
 // Modified 2026 by Hitesh Soliwal and contributors: guarded bulk membership compaction.
 // Modified 2026 by Hitesh Soliwal and contributors: linear indexed bulk insertion into reusable slots.
+// Modified 2026 by Hitesh Soliwal and Synexia contributors: direct cursor callback traversal.
 package com.m3.collections.apache.list;
 
 import java.util.AbstractList;
@@ -37,6 +38,7 @@ import java.util.Iterator;
 import java.util.ListIterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.function.Consumer;
 
 import com.m3.collections.apache.OrderedIterator;
 
@@ -1116,6 +1118,38 @@ public class TreeList<E> extends AbstractList<E> {
     @Override
     public boolean contains(final Object object) {
         return indexOf(object) >= 0;
+    }
+
+    /**
+     * Performs an action in list order without materializing an iterator.
+     * Subclasses retain iterator dispatch. Modification checks and cursor
+     * advancement follow the existing iterator before each callback.
+     *
+     * @param action the action to perform for each element
+     * @throws NullPointerException if the action is null
+     */
+    @Override
+    public void forEach(final Consumer<? super E> action) {
+        Objects.requireNonNull(action);
+        if (getClass() != TreeList.class) {
+            super.forEach(action);
+            return;
+        }
+        final int expectedModCount = modCount;
+        int next = root == -1 ? -1 : slots.get(root, 0);
+        int nextIndex = 0;
+        while (nextIndex < size) {
+            if (modCount != expectedModCount) {
+                throw new ConcurrentModificationException();
+            }
+            if (next == -1) {
+                next = slots.get(root, nextIndex);
+            }
+            final E value = slots.value(next);
+            nextIndex++;
+            next = slots.next(next);
+            action.accept(value);
+        }
     }
 
     /**

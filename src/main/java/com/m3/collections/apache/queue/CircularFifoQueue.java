@@ -18,6 +18,7 @@
 // Modified 2026 by Hitesh Soliwal and Contributors to the Synexia Project:
 // bounded contiguous-span compaction and array export of the existing array-owned ring.
 // Modified 2026 by Hitesh Soliwal and contributors: stable in-place bulk membership filtering.
+// Modified 2026 by Hitesh Soliwal and Synexia contributors: direct cursor callback traversal.
 package com.m3.collections.apache.queue;
 
 import java.io.IOException;
@@ -35,6 +36,7 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Queue;
+import java.util.function.Consumer;
 
 import com.m3.collections.apache.BoundedCollection;
 
@@ -415,6 +417,31 @@ public class CircularFifoQueue<E> extends AbstractCollection<E>
             throw new NoSuchElementException("queue is empty");
         }
         return peek();
+    }
+
+    /**
+     * Performs an action in FIFO order using the ring's primitive cursor.
+     * Subclasses retain their iterator dispatch and the traversal observes
+     * callback changes with the same dynamic-end rules as the iterator.
+     *
+     * @param action the action to perform for each element
+     * @throws NullPointerException if the action is null
+     */
+    @Override
+    public void forEach(final Consumer<? super E> action) {
+        Objects.requireNonNull(action);
+        if (getClass() != CircularFifoQueue.class) {
+            super.forEach(action);
+            return;
+        }
+        int cursor = start;
+        boolean first = full;
+        while (first || cursor != end) {
+            first = false;
+            final int returned = cursor;
+            cursor = increment(cursor);
+            action.accept(elements[returned]);
+        }
     }
 
     /**
