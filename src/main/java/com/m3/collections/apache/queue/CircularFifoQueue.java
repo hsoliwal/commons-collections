@@ -17,6 +17,7 @@
 // Array-operation contribution: Copyright (c) 2026 Hitesh Soliwal and Synexia contributors.
 // Modified 2026 by Hitesh Soliwal and Contributors to the Synexia Project:
 // bounded contiguous-span compaction and array export of the existing array-owned ring.
+// Modified 2026 by Hitesh Soliwal and contributors: stable in-place bulk membership filtering.
 package com.m3.collections.apache.queue;
 
 import java.io.IOException;
@@ -29,6 +30,7 @@ import java.util.AbstractCollection;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
@@ -217,6 +219,112 @@ public class CircularFifoQueue<E> extends AbstractCollection<E>
     }
 
     /**
+     * Compact a callback-free membership selection through the existing ring.
+     * Arbitrary payloads, collections and subclasses retain serial iterator removal.
+     *
+     * @return the removed count, or -1 when inherited dispatch is required
+     */
+    private int filterMembership(final Collection<?> membership, final boolean retain) {
+        if (getClass() != CircularFifoQueue.class || membership == null
+                || membership.getClass() != HashSet.class) {
+            return -1;
+        }
+        final int count = size();
+        if (count < 256) {
+            return -1;
+        }
+        int cursor = start;
+        int firstRemoved = -1;
+        int lastRemoved = -1;
+        int firstRemovedSlot = -1;
+        int removed = 0;
+        for (int i = 0; i < count; i++) {
+            final Object value = elements[cursor];
+            if (value == null || (value.getClass() != Integer.class
+                    && value.getClass() != Long.class && value.getClass() != String.class)) {
+                return -1;
+            }
+            // Only final scalar queries reach the exact HashSet here.
+            // Reject an unknown payload before invoking any of its methods.
+            if (membership.contains(value) != retain) {
+                if (firstRemoved == -1) {
+                    firstRemoved = i;
+                    firstRemovedSlot = cursor;
+                }
+                lastRemoved = i;
+                removed++;
+            }
+            cursor = increment(cursor);
+        }
+        if (removed == 0) {
+            return 0;
+        }
+        // Nothing has been mutated until every query is known to be callback-free.
+        if (removed == lastRemoved + 1) {
+            start = clearRingSpan(start, removed);
+            full = false;
+            return removed;
+        }
+        if (removed == count - firstRemoved) {
+            clearRingSpan(firstRemovedSlot, removed);
+            end = firstRemovedSlot;
+            full = false;
+            return removed;
+        }
+        int write = start;
+        int firstKept = -1;
+        cursor = start;
+        for (int i = 0; i < count; i++) {
+            final E value = elements[cursor];
+            if (membership.contains(value) == retain) {
+                if (firstKept == -1) {
+                    // Serial leading removals advance start rather than shifting.
+                    firstKept = cursor;
+                    write = cursor;
+                }
+                if (write != cursor) {
+                    elements[write] = value;
+                    elements[cursor] = null;
+                }
+                write = increment(write);
+            } else {
+                elements[cursor] = null;
+            }
+            cursor = increment(cursor);
+        }
+        start = firstKept;
+        end = write;
+        full = false;
+        return removed;
+    }
+
+    /** Clear at most two physical spans and return the following ring coordinate. */
+    private int clearRingSpan(final int first, final int length) {
+        final int untilWrap = maxElements - first;
+        if (length < untilWrap) {
+            Arrays.fill(elements, first, first + length, null);
+            return first + length;
+        }
+        Arrays.fill(elements, first, maxElements, null);
+        Arrays.fill(elements, 0, length - untilWrap, null);
+        return length - untilWrap;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean removeAll(final Collection<?> collection) {
+        final int removed = filterMembership(collection, false);
+        return removed < 0 ? super.removeAll(collection) : removed != 0;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean retainAll(final Collection<?> collection) {
+        final int removed = filterMembership(collection, true);
+        return removed < 0 ? super.retainAll(collection) : removed != 0;
+    }
+
+    /**
      * Clears this queue.
      */
     @Override
@@ -381,7 +489,7 @@ public class CircularFifoQueue<E> extends AbstractCollection<E>
     /**
      * Returns an iterator over this queue's elements.
      *
-     * @return An iterator over this queue's elements
+     * @return An iterator over the queue's elements
      */
     @Override
     public Iterator<E> iterator() {
@@ -475,7 +583,7 @@ public class CircularFifoQueue<E> extends AbstractCollection<E>
      * Deserializes the queue in using a custom routine.
      *
      * @param in  The input stream
-     * @throws IOException Thrown if an I/O error occurs while writing to the output stream
+     * @throws IOException Thrown if an I/O error occurs writing to the output stream
      * @throws ClassNotFoundException if the class of a serialized object cannot be found
      */
     @SuppressWarnings("unchecked")
