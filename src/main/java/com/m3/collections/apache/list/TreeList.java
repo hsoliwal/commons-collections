@@ -24,9 +24,11 @@
 // Modified 2026 by Hitesh Soliwal and contributors: allocation-free reversed-spine AVL joins.
 // Modified 2026 by Hitesh Soliwal and contributors: array-backed linear bulk range removal.
 // Modified 2026 by Hitesh Soliwal and contributors: guarded bulk membership compaction.
+// Modified 2026 by Hitesh Soliwal and contributors: linear indexed bulk insertion into reusable slots.
 package com.m3.collections.apache.list;
 
 import java.util.AbstractList;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.ConcurrentModificationException;
@@ -575,6 +577,57 @@ public class TreeList<E> extends AbstractList<E> {
             free = slot;
         }
 
+        /** Splice exact-owner payloads into existing slots before rebuilding the ranked threads. */
+        private int insertRange(final int root, final int index, final Collection<? extends E> source,
+                final int added, final int totalSize) {
+            int first = min(root);
+            int last = NONE;
+            int after = NONE;
+            int position = 0;
+            int current = first;
+            while (current != NONE) {
+                final int successor = next(current);
+                if (position++ == index) {
+                    after = current;
+                }
+                left[current] = last;
+                if (last != NONE) {
+                    right[last] = current;
+                }
+                state[current] = LEFT_PREVIOUS | RIGHT_NEXT | LIVE;
+                last = current;
+                current = successor;
+            }
+            right[last] = NONE;
+            int previous = after == NONE ? last : left[after];
+            final TreeList<? extends E> sourceTree = source.getClass() == TreeList.class
+                    ? (TreeList<? extends E>) source : null;
+            final ArrayList<? extends E> sourceArray =
+                    sourceTree == null ? (ArrayList<? extends E>) source : null;
+            int sourceSlot = sourceTree == null ? NONE : sourceTree.slots.min(sourceTree.root);
+            for (int i = 0; i < added; i++) {
+                // Exact-owner access invokes no user callback; the caller proves capacity.
+                final E value;
+                if (sourceTree == null) {
+                    value = sourceArray.get(i);
+                } else {
+                    value = sourceTree.slots.value(sourceSlot);
+                    sourceSlot = sourceTree.slots.next(sourceSlot);
+                }
+                final int slot = newLeaf(0, value, after, previous);
+                if (previous == NONE) {
+                    first = slot;
+                } else {
+                    right[previous] = slot;
+                }
+                previous = slot;
+            }
+            if (after != NONE) {
+                left[after] = previous;
+            }
+            return (int) (rebuildRange(first, totalSize) >>> 32);
+        }
+
         /** Release a large range and thread the surviving slots without allocation. */
         private int removeRange(final int root, final int fromIndex, final int toIndex, final int remainingSize) {
             int first = NONE;
@@ -803,7 +856,7 @@ public class TreeList<E> extends AbstractList<E> {
          * Create a ListIterator for a list.
          *
          * @param parent  The parent list
-         * @param fromIndex  The index to start at
+         * @param fromIndex  The index to start from
          */
         protected TreeListIterator(final TreeList<E> parent, final int fromIndex) {
             checkInterval(fromIndex, 0, parent.size(), parent.size());
@@ -1003,6 +1056,31 @@ public class TreeList<E> extends AbstractList<E> {
         final int cTree = slots.build(c);
         root = root == -1 ? cTree : slots.addAll(root, cTree, size);
         size += c.size();
+        return true;
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Large indexed inserts from an exact ArrayList or a different exact TreeList
+     * reuse existing slots in one linear pass when no capacity growth is necessary.
+     * Other inputs preserve inherited dispatch and failure behavior.</p>
+     */
+    @Override
+    public boolean addAll(final int index, final Collection<? extends E> c) {
+        if (getClass() != TreeList.class || c == null || c == this
+                || (c.getClass() != ArrayList.class && c.getClass() != TreeList.class)
+                || index < 0 || index > size || size < 4096) {
+            return super.addAll(index, c);
+        }
+        final int added = c.size();
+        if (added < size - (size >>> 1) || (long) size + added > slots.values.length) {
+            return super.addAll(index, c);
+        }
+        // No snapshot, growth, or user callbacks occur on this exact-class path.
+        root = slots.insertRange(root, index, c, added, size + added);
+        size += added;
+        modCount += added;
         return true;
     }
 
