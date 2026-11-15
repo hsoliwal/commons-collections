@@ -17,12 +17,12 @@
 // Modified 2026 by Hitesh Soliwal and contributors: segmented array-owned mappings.
 // Modified 2026-11-14: page-bounded entry projections and projection-free key snapshots.
 // Modified 2026 by Hitesh Soliwal and contributors: reserve bucket snapshot capacity once.
+// Modified 2026 by Synexia contributors: directly owned iterator snapshots.
 package com.m3.collections.apache.map;
 
 import java.lang.ref.WeakReference;
 import java.util.AbstractCollection;
 import java.util.AbstractSet;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.ConcurrentModificationException;
@@ -117,24 +117,27 @@ import com.m3.collections.apache.KeyValue;
 public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
 
     class BaseIterator {
-        private final ArrayList<Map.Entry<K, V>> current = new ArrayList<>();
+        private Object[] current = EMPTY_SNAPSHOT;
+        private int currentSize;
         private int bucket;
         private Map.Entry<K, V> last;
 
         public boolean hasNext() {
-            if (!current.isEmpty()) {
+            if (currentSize != 0) {
                 return true;
             }
             while (bucket < buckets.length) {
                 synchronized (locks[bucket]) {
-                    current.ensureCapacity(locks[bucket].size);
+                    current = growSnapshot(current, locks[bucket].size);
                     int n = buckets[bucket];
                     while (n != NONE) {
-                        current.add(entryAt(n));
+                        final Map.Entry<K, V> entry = entryAt(n);
+                        current = growSnapshot(current, (long) currentSize + 1L);
+                        current[currentSize++] = entry;
                         n = arena.next(n);
                     }
                     bucket++;
-                    if (!current.isEmpty()) {
+                    if (currentSize != 0) {
                         return true;
                     }
                 }
@@ -146,7 +149,16 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
             if (!hasNext()) {
                 throw new NoSuchElementException();
             }
-            last = current.remove(current.size() - 1);
+            if (currentSize == 0) {
+                // A package-local subclass can override hasNext(). Preserve the
+                // original exception class/message without consuming any state.
+                return new java.util.ArrayList<Map.Entry<K, V>>(0).remove(-1);
+            }
+            final int index = --currentSize;
+            @SuppressWarnings("unchecked")
+            final Map.Entry<K, V> entry = (Map.Entry<K, V>) current[index];
+            current[index] = null;
+            last = entry;
             return last;
         }
 
@@ -233,25 +245,27 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
 
     /** Key snapshots need neither live value projections nor entry identity. */
     private final class KeyIterator implements Iterator<K> {
-        private final ArrayList<K> current = new ArrayList<>();
+        private Object[] current = EMPTY_SNAPSHOT;
+        private int currentSize;
         private int bucket;
         private K last;
         private boolean removable;
 
         @Override
-        @SuppressWarnings("unchecked")
         public boolean hasNext() {
-            if (!current.isEmpty()) {
+            if (currentSize != 0) {
                 return true;
             }
             while (bucket < buckets.length) {
                 synchronized (locks[bucket]) {
-                    current.ensureCapacity(locks[bucket].size);
+                    current = growSnapshot(current, locks[bucket].size);
                     for (int slot = buckets[bucket]; slot != NONE; slot = arena.next(slot)) {
-                        current.add((K) arena.key(slot));
+                        final Object key = arena.key(slot);
+                        current = growSnapshot(current, (long) currentSize + 1L);
+                        current[currentSize++] = key;
                     }
                     bucket++;
-                    if (!current.isEmpty()) {
+                    if (currentSize != 0) {
                         return true;
                     }
                 }
@@ -264,7 +278,11 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
             if (!hasNext()) {
                 throw new NoSuchElementException();
             }
-            last = current.remove(current.size() - 1);
+            final int index = --currentSize;
+            @SuppressWarnings("unchecked")
+            final K key = (K) current[index];
+            current[index] = null;
+            last = key;
             removable = true;
             return last;
         }
@@ -323,6 +341,22 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
             return StaticBucketMap.this.size();
         }
 
+    }
+
+    /** Shared initial buffer; an iterator allocates payload storage only on demand. */
+    private static final Object[] EMPTY_SNAPSHOT = new Object[0];
+
+    /** Reserve before publication, including a defensive count-underestimate path. */
+    private static Object[] growSnapshot(final Object[] snapshot, final long required) {
+        if (required <= snapshot.length) {
+            return snapshot;
+        }
+        if (required > Integer.MAX_VALUE) {
+            throw new OutOfMemoryError("StaticBucketMap snapshot capacity exhausted");
+        }
+        final long geometric = (long) snapshot.length + (snapshot.length >>> 1);
+        final int capacity = (int) Math.min(Integer.MAX_VALUE, Math.max(required, geometric));
+        return Arrays.copyOf(snapshot, capacity);
     }
 
     private static final int NONE = -1;
@@ -689,7 +723,7 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
      * of buckets is never below 17, and is always an odd number (StaticBucketMap
      * ensures this). The number of buckets is inversely proportional to the
      * chances for thread contention.  The fewer buckets, the more chances for
-     * thread contention.  The more buckets the fewer chances for thread
+     * thread contention.  The more buckets, the fewer chances for thread
      * contention.
      *
      * @param numBuckets  The number of buckets for this map

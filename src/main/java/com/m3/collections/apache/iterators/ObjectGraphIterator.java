@@ -14,10 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+// Modified 2026 by Synexia contributors: indexed ancestors and stack-bounded exact-owner traversal.
 package com.m3.collections.apache.iterators;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
@@ -82,8 +82,12 @@ import com.m3.collections.apache.Transformer;
  */
 public class ObjectGraphIterator<E> implements Iterator<E> {
 
-    /** The stack of iterators */
-    private final Deque<Iterator<? extends E>> stack = new ArrayDeque<>(8);
+    /** Empty traversal does not allocate an ancestor container. */
+    private static final Iterator<?>[] EMPTY_ITERATORS = new Iterator<?>[0];
+
+    /** Parent-owned ancestor references, cleared as they are popped. */
+    private Iterator<?>[] stack = EMPTY_ITERATORS;
+    private int stackSize;
 
     /** The root object in the tree */
     private E root;
@@ -161,10 +165,14 @@ public class ObjectGraphIterator<E> implements Iterator<E> {
      * @param iterator  The iterator to start from
      */
     protected void findNextByIterator(final Iterator<? extends E> iterator) {
+        if (getClass() == ObjectGraphIterator.class) {
+            findNextIteratively(iterator);
+            return;
+        }
         if (iterator != currentIterator) {
             // recurse a level
             if (currentIterator != null) {
-                stack.push(currentIterator);
+                pushIterator(currentIterator);
             }
             currentIterator = iterator;
         }
@@ -177,10 +185,73 @@ public class ObjectGraphIterator<E> implements Iterator<E> {
             findNext(next);
         }
         // if we haven't found the next value and iterators are not yet exhausted
-        if (!hasNext && !stack.isEmpty()) {
+        if (!hasNext && stackSize != 0) {
             // current iterator exhausted, go up a level
-            currentIterator = stack.pop();
+            currentIterator = popIterator();
             findNextByIterator(currentIterator);
+        }
+    }
+
+    private void pushIterator(final Iterator<? extends E> iterator) {
+        if (stackSize == stack.length) {
+            final long capacity = Math.max(8L, (long) stack.length + (stack.length >>> 1));
+            if (capacity > Integer.MAX_VALUE - 8L) {
+                throw new OutOfMemoryError("ObjectGraphIterator ancestor capacity exhausted");
+            }
+            stack = Arrays.copyOf(stack, (int) capacity);
+        }
+        stack[stackSize++] = iterator;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Iterator<? extends E> popIterator() {
+        final int index = --stackSize;
+        final Iterator<? extends E> iterator = (Iterator<? extends E>) stack[index];
+        stack[index] = null;
+        return iterator;
+    }
+
+    /**
+     * Each nested descent leaves one while-loop continuation. Tail returns need
+     * no frame. Keep the original hasNext-before-cache-check evaluation order,
+     * including the repeated child callbacks while those continuations unwind.
+     * Subclasses retain the original protected recursive dispatch above.
+     */
+    @SuppressWarnings("unchecked")
+    private void findNextIteratively(final Iterator<? extends E> iterator) {
+        if (iterator != currentIterator) {
+            if (currentIterator != null) {
+                pushIterator(currentIterator);
+            }
+            currentIterator = iterator;
+        }
+        long continuations = 0;
+        for (;;) {
+            while (currentIterator.hasNext() && !hasNext) {
+                E next = currentIterator.next();
+                if (transformer != null) {
+                    next = transformer.apply(next);
+                }
+                if (next instanceof Iterator) {
+                    continuations++;
+                    final Iterator<? extends E> child = (Iterator<? extends E>) next;
+                    if (child != currentIterator) {
+                        pushIterator(currentIterator);
+                        currentIterator = child;
+                    }
+                } else {
+                    currentValue = next;
+                    hasNext = true;
+                }
+            }
+            if (!hasNext && stackSize != 0) {
+                currentIterator = popIterator();
+                continue;
+            }
+            if (continuations == 0) {
+                return;
+            }
+            continuations--;
         }
     }
 
