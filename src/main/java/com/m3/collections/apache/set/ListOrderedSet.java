@@ -366,8 +366,88 @@ public class ListOrderedSet<E>
         return result;
     }
 
+    /** Equality must be callback-free before combining serial removals. */
+    private static boolean isStableBulkValue(final Object value) {
+        return value == null || value.getClass() == String.class
+                || value.getClass() == Integer.class || value.getClass() == Long.class;
+    }
+
+    /**
+     * Check both externally supplied owners before compacting their shared membership.
+     * Unknown values, owners and subclasses retain the original remove dispatch.
+     */
+    private boolean canCompactRemoval(final Collection<?> coll) {
+        if (getClass() != ListOrderedSet.class || setOrder.getClass() != ArrayList.class
+                || decorated().getClass() != HashSet.class || coll == null
+                || (coll != this && (coll.getClass() != HashSet.class
+                        || size() < 8192 || coll.size() < 1024))) {
+            return false;
+        }
+        final int count = setOrder.size();
+        if (count != decorated().size() || count > 1 << 29) {
+            return false;
+        }
+        int capacity = 1;
+        while (capacity < count * 2) {
+            capacity <<= 1;
+        }
+        // One scratch lane proves uniqueness without allocating a node per value.
+        final Object[] observed = new Object[capacity];
+        final int mask = capacity - 1;
+        boolean nullSeen = false;
+        for (final E value : setOrder) {
+            if (!isStableBulkValue(value) || !decorated().contains(value)) {
+                return false;
+            }
+            if (value == null) {
+                if (nullSeen) {
+                    return false;
+                }
+                nullSeen = true;
+            } else {
+                final int hash = value.hashCode();
+                int slot = (hash ^ hash >>> 16) & mask;
+                int probes = 0;
+                while (observed[slot] != null) {
+                    if (value.equals(observed[slot]) || ++probes == 16) {
+                        // Collisions must not turn the admission scan quadratic.
+                        return false;
+                    }
+                    slot = slot + 1 & mask;
+                }
+                observed[slot] = value;
+            }
+        }
+        if (coll != this) {
+            for (final Object value : coll) {
+                if (!isStableBulkValue(value)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     @Override
     public boolean removeAll(final Collection<?> coll) {
+        if (canCompactRemoval(coll)) {
+            if (coll == this) {
+                if (isEmpty()) {
+                    return false;
+                }
+                clear();
+                return true;
+            }
+            // Compact the array once, preserving the identity and order of survivors.
+            final boolean changed = setOrder.removeAll(coll);
+            if (changed) {
+                // Keep the original removal order in the backing hash table as well.
+                for (final Object value : coll) {
+                    decorated().remove(value);
+                }
+            }
+            return changed;
+        }
         boolean result = false;
         for (final Object name : coll) {
             result |= remove(name);
