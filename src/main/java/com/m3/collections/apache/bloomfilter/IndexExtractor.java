@@ -16,6 +16,7 @@
  */
 // Modified 2026-11-13 by Hitesh Soliwal and Synexia contributors: direct array/bitmap hot paths.
 // Modified 2026-11-15 by Hitesh Soliwal and contributors: bounded array snapshots.
+// Modified 2026 by Synexia contributors: compact sorted sparse unique snapshots.
 package com.m3.collections.apache.bloomfilter;
 
 import java.util.Arrays;
@@ -96,15 +97,31 @@ public interface IndexExtractor {
                 }
                 int maximum = 0;
                 int minimum = Integer.MAX_VALUE;
+                int previous = Integer.MIN_VALUE;
+                int sortedDistinct = 0;
+                boolean nondecreasing = true;
                 for (final int value : values) {
                     minimum = Math.min(minimum, value);
                     maximum = Math.max(maximum, value);
+                    if (value < previous) {
+                        nondecreasing = false;
+                    }
+                    if (value != previous) {
+                        sortedDistinct++;
+                    }
+                    previous = value;
                 }
                 if (minimum < 0 || maximum == Integer.MAX_VALUE) {
                     // Preserve default rejection and overflow-boundary behavior.
                     return IndexExtractor.super.uniqueIndices();
                 }
-                if ((long) maximum <= (long) values.length * Long.SIZE) {
+                // Preserve the compact bitmap path for genuinely dense inputs.
+                // When an already-ordered source has few distinct keys compared
+                // with its highest index, an exact-sized int[] is much smaller.
+                final long bitmapBytes = (((long) maximum >>> 6) + 1L) * Long.BYTES;
+                final boolean compactOrdered = nondecreasing
+                        && (long) sortedDistinct * Integer.BYTES + 32L < bitmapBytes;
+                if ((long) maximum <= (long) values.length * Long.SIZE && !compactOrdered) {
                     // Dense inputs retain the bitmap algorithm without growing it.
                     final BitSet bitSet = new BitSet(maximum + 1);
                     for (final int value : values) {
@@ -127,13 +144,31 @@ public interface IndexExtractor {
                         }
                     };
                 }
-                final int[] sorted = values.clone();
-                Arrays.sort(sorted);
-                int distinct = 0;
-                for (final int value : sorted) {
-                    if (distinct == 0 || value != sorted[distinct - 1]) {
-                        sorted[distinct++] = value;
+                final int[] sorted;
+                final int distinct;
+                if (nondecreasing) {
+                    // The source is already ordered; compact directly into the
+                    // exact-sized detached snapshot, avoiding clone and sort.
+                    sorted = new int[sortedDistinct];
+                    int write = 0;
+                    int last = Integer.MIN_VALUE;
+                    for (final int value : values) {
+                        if (value != last) {
+                            sorted[write++] = value;
+                        }
+                        last = value;
                     }
+                    distinct = sorted.length;
+                } else {
+                    sorted = values.clone();
+                    Arrays.sort(sorted);
+                    int count = 0;
+                    for (final int value : sorted) {
+                        if (count == 0 || value != sorted[count - 1]) {
+                            sorted[count++] = value;
+                        }
+                    }
+                    distinct = count;
                 }
                 final int[] unique = distinct == sorted.length ? sorted : Arrays.copyOf(sorted, distinct);
                 return new IndexExtractor() {
