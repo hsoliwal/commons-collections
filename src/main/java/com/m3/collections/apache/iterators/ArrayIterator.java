@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+// Modified 2026 by Hitesh Soliwal and contributors: direct reference-array reads with reflective fallbacks.
 package com.m3.collections.apache.iterators;
 
 import java.lang.reflect.Array;
@@ -172,6 +173,13 @@ public class ArrayIterator<E> implements ResettableIterator<E> {
         if (!hasNext()) {
             throw new NoSuchElementException();
         }
+        if (array instanceof Object[]) {
+            final Object[] values = (Object[]) array;
+            if (index >= 0 && index < values.length) {
+                return (E) values[index++];
+            }
+        }
+        // Preserve primitive boxing and reflective failures for overridden bounds.
         return (E) Array.get(array, index++);
     }
 
