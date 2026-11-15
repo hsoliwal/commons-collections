@@ -22,6 +22,7 @@
 // Modified 2026 by Hitesh Soliwal and contributors: bounded bulk rollback through initialized child links.
 // Modified 2026 by Hitesh Soliwal and Synexia contributors: single-pass removal and nonredundant AVL height updates.
 // Modified 2026 by Hitesh Soliwal and contributors: allocation-free reversed-spine AVL joins.
+// Modified 2026 by Hitesh Soliwal and contributors: array-backed linear bulk range removal.
 package com.m3.collections.apache.list;
 
 import java.util.AbstractList;
@@ -572,6 +573,65 @@ public class TreeList<E> extends AbstractList<E> {
             free = slot;
         }
 
+        /** Release a large range and thread the surviving slots without allocation. */
+        private int removeRange(final int root, final int fromIndex, final int toIndex, final int remainingSize) {
+            int first = NONE;
+            int last = NONE;
+            int index = 0;
+            int current = min(root);
+            while (current != NONE) {
+                // Compute the original successor before changing either link lane.
+                final int successor = next(current);
+                if (index >= fromIndex && index < toIndex) {
+                    releaseSlot(current);
+                } else {
+                    left[current] = last;
+                    if (last == NONE) {
+                        first = current;
+                    } else {
+                        right[last] = current;
+                    }
+                    state[current] = LEFT_PREVIOUS | RIGHT_NEXT | LIVE;
+                    last = current;
+                }
+                index++;
+                current = successor;
+            }
+            if (last != NONE) {
+                right[last] = NONE;
+            }
+            return (int) (rebuildRange(first, remainingSize) >>> 32);
+        }
+
+        /** Pack the rebuilt root and the unconsumed chain head into one primitive. */
+        private long rebuildRange(final int first, final int length) {
+            if (length == 0) {
+                return ((long) NONE << 32) | (first & 0xffffffffL);
+            }
+            final int leftSize = length >>> 1;
+            final long prefix = rebuildRange(first, leftSize);
+            final int leftRoot = (int) (prefix >>> 32);
+            final int root = (int) prefix;
+            final long suffix = rebuildRange(right[root], length - leftSize - 1);
+            final int rightRoot = (int) (suffix >>> 32);
+            state[root] = LIVE;
+            if (leftRoot == NONE) {
+                state[root] |= LEFT_PREVIOUS;
+            } else {
+                left[root] = leftRoot;
+                relativePosition[leftRoot] -= leftSize;
+            }
+            if (rightRoot == NONE) {
+                state[root] |= RIGHT_NEXT;
+            } else {
+                right[root] = rightRoot;
+                relativePosition[rightRoot]++;
+            }
+            relativePosition[root] = leftSize;
+            recalcHeight(root);
+            return ((long) root << 32) | (suffix & 0xffffffffL);
+        }
+
         private void releaseDetached() {
             releaseSlot(detached);
             detached = NONE;
@@ -980,7 +1040,7 @@ public class TreeList<E> extends AbstractList<E> {
     /**
      * Gets an iterator over the list.
      *
-     * @return An iterator over the list
+     * @return The new iterator
      */
     @Override
     public Iterator<E> iterator() {
@@ -1035,6 +1095,27 @@ public class TreeList<E> extends AbstractList<E> {
         slots.releaseDetached();
         size--;
         return result;
+    }
+
+    /**
+     * Removes large contiguous ranges in linear time using the existing slots.
+     * Small ranges and subclasses retain the inherited iterator/removal dispatch.
+     *
+     * @param fromIndex the first index to remove
+     * @param toIndex the first index to retain after the range
+     */
+    @Override
+    protected void removeRange(final int fromIndex, final int toIndex) {
+        final int removed = toIndex - fromIndex;
+        if (getClass() != TreeList.class || fromIndex < 0 || toIndex > size || fromIndex > toIndex
+                || size < 4096 || removed < size - (size >>> 1)) {
+            super.removeRange(fromIndex, toIndex);
+            return;
+        }
+        // No user callbacks occur in the exact-class path. Reuse every storage lane.
+        root = slots.removeRange(root, fromIndex, toIndex, size - removed);
+        size -= removed;
+        modCount += removed;
     }
 
     /**
