@@ -23,12 +23,14 @@
 // Modified 2026 by Hitesh Soliwal and Synexia contributors: single-pass removal and nonredundant AVL height updates.
 // Modified 2026 by Hitesh Soliwal and contributors: allocation-free reversed-spine AVL joins.
 // Modified 2026 by Hitesh Soliwal and contributors: array-backed linear bulk range removal.
+// Modified 2026 by Hitesh Soliwal and contributors: guarded bulk membership compaction.
 package com.m3.collections.apache.list;
 
 import java.util.AbstractList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.ConcurrentModificationException;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.ListIterator;
 import java.util.NoSuchElementException;
@@ -603,6 +605,34 @@ public class TreeList<E> extends AbstractList<E> {
             return (int) (rebuildRange(first, remainingSize) >>> 32);
         }
 
+        /** Compact a callback-free membership selection through the existing slot lanes. */
+        private int removeMembership(final int root, final Collection<?> membership,
+                final boolean retain, final int remainingSize) {
+            int first = NONE;
+            int last = NONE;
+            int current = min(root);
+            while (current != NONE) {
+                final int successor = next(current);
+                if (membership.contains(values[current]) != retain) {
+                    releaseSlot(current);
+                } else {
+                    left[current] = last;
+                    if (last == NONE) {
+                        first = current;
+                    } else {
+                        right[last] = current;
+                    }
+                    state[current] = LEFT_PREVIOUS | RIGHT_NEXT | LIVE;
+                    last = current;
+                }
+                current = successor;
+            }
+            if (last != NONE) {
+                right[last] = NONE;
+            }
+            return (int) (rebuildRange(first, remainingSize) >>> 32);
+        }
+
         /** Pack the rebuilt root and the unconsumed chain head into one primitive. */
         private long rebuildRange(final int first, final int length) {
             if (length == 0) {
@@ -1040,7 +1070,7 @@ public class TreeList<E> extends AbstractList<E> {
     /**
      * Gets an iterator over the list.
      *
-     * @return The new iterator
+     * @return An iterator over the list
      */
     @Override
     public Iterator<E> iterator() {
@@ -1095,6 +1125,59 @@ public class TreeList<E> extends AbstractList<E> {
         slots.releaseDetached();
         size--;
         return result;
+    }
+
+    /**
+     * Attempts dense membership compaction only when all membership lookups are
+     * free of user callbacks. Other collections, payloads and subclasses retain
+     * the inherited encounter-order callbacks and partial-failure behavior.
+     *
+     * @return the removed count, or -1 when inherited dispatch is required
+     */
+    private int removeMembership(final Collection<?> membership, final boolean retain) {
+        if (size < 4096 || getClass() != TreeList.class || membership == null
+                || membership.getClass() != HashSet.class) {
+            return -1;
+        }
+        // Avoid a full preflight for the usual small-remove/large-retain inputs.
+        if (retain ? membership.size() > size / 2 : membership.size() < size / 2) {
+            return -1;
+        }
+        int removed = 0;
+        for (int slot = slots.min(root); slot != -1; slot = slots.next(slot)) {
+            final Object value = slots.values[slot];
+            if (value != null && value.getClass() != Integer.class
+                    && value.getClass() != Long.class && value.getClass() != String.class) {
+                return -1;
+            }
+            if (membership.contains(value) != retain) {
+                removed++;
+            }
+        }
+        if (removed == 0) {
+            return 0;
+        }
+        if (removed < size - (size >>> 1)) {
+            return -1;
+        }
+        root = slots.removeMembership(root, membership, retain, size - removed);
+        size -= removed;
+        modCount += removed;
+        return removed;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean removeAll(final Collection<?> collection) {
+        final int removed = removeMembership(collection, false);
+        return removed < 0 ? super.removeAll(collection) : removed != 0;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean retainAll(final Collection<?> collection) {
+        final int removed = removeMembership(collection, true);
+        return removed < 0 ? super.retainAll(collection) : removed != 0;
     }
 
     /**
