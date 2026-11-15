@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+// Modified 2026 by Hitesh Soliwal and contributors: sparse lifecycle array hot paths.
 package com.m3.collections.apache.bloomfilter;
 
 import java.util.Arrays;
@@ -167,19 +168,35 @@ public final class SparseBloomFilter implements BloomFilter<SparseBloomFilter> {
             }
             if (key < keys[slot]) {
                 final int child = insert(left[slot], key, previous, slot);
+                if (child < 0) {
+                    // A complemented coordinate reports unchanged subtree height.
+                    if (left[slot] != ~child) {
+                        left[slot] = ~child;
+                    }
+                    return ~slot;
+                }
                 left[slot] = child;
             } else if (key > keys[slot]) {
                 final int child = insert(right[slot], key, slot, successor);
+                if (child < 0) {
+                    if (right[slot] != ~child) {
+                        right[slot] = ~child;
+                    }
+                    return ~slot;
+                }
                 right[slot] = child;
             } else {
-                return slot;
+                return ~slot;
             }
+            final int oldHeight = heights[slot];
             recalcHeight(slot);
-            return balance(slot);
+            final int balanced = balance(slot);
+            return heights[balanced] == oldHeight ? ~balanced : balanced;
         }
 
         private void add(final int key) {
-            root = insert(root, key, NONE, NONE);
+            final int result = insert(root, key, NONE, NONE);
+            root = result < 0 ? ~result : result;
         }
 
         private boolean contains(final int key) {
@@ -194,6 +211,49 @@ public final class SparseBloomFilter implements BloomFilter<SparseBloomFilter> {
                 }
             }
             return false;
+        }
+
+        /** Use sorted lanes for large peer queries, tree lookup for small ones. */
+        private boolean containsAll(final IndexStore other) {
+            if (other == this || other.size == 0) {
+                return true;
+            }
+            if (other.size == 1) {
+                return contains(other.keys[other.first]);
+            }
+            if (size < other.size || keys[first] > other.keys[other.first]
+                    || keys[last] < other.keys[other.last]) {
+                return false;
+            }
+            final int expectedModCount = other.modCount;
+            // Estimate coordinate visits without a workload-specific size constant.
+            if ((long) other.size * (height(root) + 1) < (long) size + other.size) {
+                for (int slot = other.first; slot != NONE; slot = other.next[slot]) {
+                    final boolean found = contains(other.keys[slot]);
+                    if (other.modCount != expectedModCount) {
+                        throw new ConcurrentModificationException();
+                    }
+                    if (!found) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            int current = first;
+            for (int slot = other.first; slot != NONE; slot = other.next[slot]) {
+                final int wanted = other.keys[slot];
+                while (current != NONE && keys[current] < wanted) {
+                    current = next[current];
+                }
+                if (other.modCount != expectedModCount) {
+                    throw new ConcurrentModificationException();
+                }
+                if (current == NONE || keys[current] != wanted) {
+                    return false;
+                }
+                current = next[current];
+            }
+            return true;
         }
 
         private void clear() {
@@ -279,6 +339,23 @@ public final class SparseBloomFilter implements BloomFilter<SparseBloomFilter> {
         return result;
     }
 
+    /** Copies the existing ascending successor lane into one detached result. */
+    @Override
+    public int[] asIndexArray() {
+        final int expectedModCount = indices.modCount;
+        final int[] result = new int[indices.size];
+        int offset = 0;
+        for (int current = indices.first; current != IndexStore.NONE;) {
+            final int value = indices.keys[current];
+            current = indices.next[current];
+            if (indices.modCount != expectedModCount) {
+                throw new ConcurrentModificationException();
+            }
+            result[offset++] = value;
+        }
+        return result;
+    }
+
     @Override
     public int cardinality() {
         return indices.size;
@@ -301,6 +378,10 @@ public final class SparseBloomFilter implements BloomFilter<SparseBloomFilter> {
 
     @Override
     public boolean contains(final IndexExtractor indexExtractor) {
+        if (indexExtractor instanceof SparseBloomFilter) {
+            return indices.containsAll(((SparseBloomFilter) indexExtractor).indices);
+        }
+        // Preserve arbitrary-producer callbacks, return values and exception behavior.
         return indexExtractor.processIndices(indices::contains);
     }
 
