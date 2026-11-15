@@ -16,6 +16,7 @@
  */
 // Modified 2026 by Hitesh Soliwal and contributors: segmented array-owned mappings.
 // Modified 2026-11-14: page-bounded entry projections and projection-free key snapshots.
+// Modified 2026 by Hitesh Soliwal and contributors: reserve bucket snapshot capacity once.
 package com.m3.collections.apache.map;
 
 import java.lang.ref.WeakReference;
@@ -126,6 +127,7 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
             }
             while (bucket < buckets.length) {
                 synchronized (locks[bucket]) {
+                    current.ensureCapacity(locks[bucket].size);
                     int n = buckets[bucket];
                     while (n != NONE) {
                         current.add(entryAt(n));
@@ -244,6 +246,7 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
             }
             while (bucket < buckets.length) {
                 synchronized (locks[bucket]) {
+                    current.ensureCapacity(locks[bucket].size);
                     for (int slot = buckets[bucket]; slot != NONE; slot = arena.next(slot)) {
                         current.add((K) arena.key(slot));
                     }
