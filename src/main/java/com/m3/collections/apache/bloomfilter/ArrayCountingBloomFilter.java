@@ -18,6 +18,7 @@
 // Modified 2026-11-13 by Hitesh Soliwal and Synexia contributors: indexed nonzero masks for sparse traversal.
 // Modified 2026-11-13 by Hitesh Soliwal and Synexia contributors: detached bitmap export from parent-owned word mask.
 // Modified 2026-11-14 by Hitesh Soliwal and Synexia contributors: wordwise bitmap containment.
+// Modified 2026 by Synexia contributors: exact-peer counting-mask containment.
 package com.m3.collections.apache.bloomfilter;
 
 import java.util.Arrays;
@@ -271,6 +272,27 @@ public final class ArrayCountingBloomFilter implements CountingBloomFilter {
 
     @Override
     public boolean contains(final IndexExtractor indexExtractor) {
+        if (indexExtractor instanceof ArrayCountingBloomFilter) {
+            // Both exact owners already maintain primitive nonzero-word masks,
+            // including negative cells in the permanent invalid state.
+            // Preserve the first failed index: in-range absence returns false,
+            // while an out-of-range request still reads cells[] and throws.
+            final long[] requested = ((ArrayCountingBloomFilter) indexExtractor).nonzeroMask;
+            for (int word = 0; word < requested.length; word++) {
+                final long bits = requested[word];
+                if (bits == 0L) {
+                    continue;
+                }
+                final long present = word < nonzeroMask.length ? nonzeroMask[word] : 0L;
+                final long missing = bits & ~present;
+                if (missing != 0L) {
+                    final int index = (word << 6) + Long.numberOfTrailingZeros(missing);
+                    return cells[index] != 0;
+                }
+            }
+            return true;
+        }
+        // Arbitrary index producers retain callbacks and exception behavior.
         return indexExtractor.processIndices(idx -> cells[idx] != 0);
     }
 
