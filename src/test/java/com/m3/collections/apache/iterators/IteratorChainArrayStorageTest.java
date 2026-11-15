@@ -16,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -23,14 +24,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.nio.file.Path;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Queue;
 import java.util.TreeSet;
 
 import org.junit.jupiter.api.AfterAll;
@@ -40,7 +39,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import com.m3.collections.apache.M3ArrayStorageOracle;
 
-/** Original-oracle checks for array-owned pending-child storage and admission atoms. */
+/** Array-storage checks, retaining the frozen oracle to document upstream contract repairs. */
 class IteratorChainArrayStorageTest {
     @TempDir
     static Path work;
@@ -72,7 +71,7 @@ class IteratorChainArrayStorageTest {
     }
 
     @Test
-    void pendingChildrenUseExistingArrayDequeWithoutPerChildLinks() throws Exception {
+    void pendingChildrenUseOwnerArrayWithoutPerChildLinks() throws Exception {
         final IteratorChain<Object> chain = new IteratorChain<>();
         final Iterator<Object> sharedChild = Collections.emptyIterator();
         for (int index = 0; index < 16385; index++) {
@@ -80,15 +79,20 @@ class IteratorChainArrayStorageTest {
         }
         final Field field = IteratorChain.class.getDeclaredField("iteratorQueue");
         field.setAccessible(true);
-        final Queue<?> pending = assertInstanceOf(ArrayDeque.class, field.get(chain));
-        assertEquals(16385, pending.size());
-        pending.forEach(child -> assertSame(sharedChild, child));
+        final Iterator<?>[] pending = assertInstanceOf(Iterator[].class, field.get(chain));
+        assertEquals(16385, chain.size());
+        for (int index = 0; index < chain.size(); index++) {
+            assertSame(sharedChild, pending[index]);
+        }
         assertFalse(chain.hasNext());
-        assertTrue(pending.isEmpty(), "consumed child references leave the canonical queue");
+        assertEquals(0, chain.size());
+        for (final Iterator<?> child : pending) {
+            assertNull(child, "consumed child references leave the owner array");
+        }
     }
 
     @Test
-    void selfAdmissionSnapshotsExactlyTheOriginalPendingChildren() throws Exception {
+    void selfAdmissionRetainsChildAndDetectsCycleInsteadOfFlattening() throws Exception {
         for (final int count : new int[] {0, 1, 2, 15, 16, 17, 63, 64, 65}) {
             final Iterator<Object> original = oracle.originalChain();
             final IteratorChain<Object> received = new IteratorChain<>();
@@ -99,15 +103,18 @@ class IteratorChainArrayStorageTest {
             }
             add(original, original);
             received.addIterator(received);
-            assertEquals(size(original), received.size());
-            assertEquals(count * 2, received.size());
-            assertEquals(drain(original), drain(received));
-            assertEquals(size(original), received.size());
+            assertEquals(count * 2, size(original), "frozen eager-flattening behavior");
+            assertEquals(count + 1, received.size(), "the child itself is retained");
+            for (int index = 0; index < count; index++) {
+                assertSame(original.next(), received.next());
+            }
+            assertTrue(drain(original).isEmpty(), "the frozen duplicate children are already exhausted");
+            assertEquals("Cyclic IteratorChain", assertThrows(IllegalStateException.class, received::hasNext).getMessage());
         }
     }
 
     @Test
-    void wrappedSelfAdmissionKeepsOriginalPartialMutationAndException() throws Exception {
+    void wrappedSelfAdmissionRetainsChildWithoutTheOldPartialMutation() throws Exception {
         for (final int count : new int[] {0, 1, 2, 15, 16, 17, 63, 64, 65}) {
             final Iterator<Object> original = oracle.originalChain();
             final IteratorChain<Object> received = new IteratorChain<>();
@@ -120,19 +127,22 @@ class IteratorChainArrayStorageTest {
             final Iterator<Object> receivedWrapper = UnmodifiableIterator.unmodifiableIterator(received);
             if (count == 0) {
                 add(original, originalWrapper);
-                received.addIterator(receivedWrapper);
             } else {
                 assertThrows(ConcurrentModificationException.class, () -> add(original, originalWrapper));
-                assertThrows(ConcurrentModificationException.class, () -> received.addIterator(receivedWrapper));
             }
-            assertEquals(size(original), received.size());
-            assertEquals(count == 0 ? 0 : count + 1, received.size());
-            assertEquals(drain(original), drain(received));
+            received.addIterator(receivedWrapper);
+            assertEquals(count == 0 ? 0 : count + 1, size(original), "frozen partial-mutation behavior");
+            assertEquals(count + 1, received.size(), "one intact decorator is admitted");
+            final List<Object> expected = drain(original);
+            for (final Object value : expected) {
+                assertSame(value, received.next());
+            }
+            assertEquals("Cyclic IteratorChain", assertThrows(IllegalStateException.class, received::hasNext).getMessage());
         }
     }
 
     @Test
-    void nestedFlatteningPreservesPayloadIdentityNullValuesAndSourceQueues() throws Exception {
+    void retainedNestedChildrenPreservePayloadIdentityAndNullValues() throws Exception {
         for (final boolean unmodifiable : new boolean[] {false, true}) {
             final Iterator<Object> originalChild = oracle.originalChain();
             final IteratorChain<Object> receivedChild = new IteratorChain<>();
@@ -182,7 +192,7 @@ class IteratorChainArrayStorageTest {
     }
 
     @Test
-    void partiallyConsumedNestedChainCopiesOnlyPendingChildren() throws Exception {
+    void partiallyConsumedNestedChainPreservesItsCurrentRemainingValues() throws Exception {
         final Iterator<Integer> originalChild = oracle.originalChain();
         final IteratorChain<Integer> receivedChild = new IteratorChain<>();
         add(originalChild, Arrays.asList(1, 2).iterator());
@@ -194,8 +204,10 @@ class IteratorChainArrayStorageTest {
         final IteratorChain<Integer> received = new IteratorChain<>();
         add(original, originalChild);
         received.addIterator(receivedChild);
-        assertEquals(drain(original), drain(received));
-        assertEquals(drain(originalChild), drain(receivedChild));
+        assertEquals(Arrays.asList(3, 4), drain(original), "frozen flattening lost the active child's remainder");
+        assertEquals(Arrays.asList(2, 3, 4), drain(received), "upstream COLLECTIONS-900 preserves every remaining value");
+        assertEquals(Collections.singletonList(2), drain(originalChild));
+        assertTrue(drain(receivedChild).isEmpty(), "the retained child is consumed exactly once");
     }
 
     @Test
