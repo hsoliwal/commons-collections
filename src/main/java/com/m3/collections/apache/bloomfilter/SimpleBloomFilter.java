@@ -16,6 +16,7 @@
  */
 // Modified 2026-11-13 by Hitesh Soliwal and Synexia contributors: direct array/bitmap hot paths.
 // Modified 2026-11-15 by Hitesh Soliwal and contributors: bounded array snapshots.
+// Modified 2026 by Synexia contributors: exact-peer word-level index operations.
 package com.m3.collections.apache.bloomfilter;
 
 import java.util.Arrays;
@@ -136,6 +137,18 @@ public final class SimpleBloomFilter implements BloomFilter<SimpleBloomFilter> {
 
     @Override
     public boolean contains(final IndexExtractor indexExtractor) {
+        if (indexExtractor instanceof SimpleBloomFilter) {
+            final long[] other = ((SimpleBloomFilter) indexExtractor).bitMap;
+            for (int i = 0; i < other.length; i++) {
+                final long word = other[i];
+                // Zero words produce no original index callback, even past our capacity.
+                // A nonzero oversized word retains the original array-bound failure.
+                if (word != 0 && (bitMap[i] & word) != word) {
+                    return false;
+                }
+            }
+            return true;
+        }
         return indexExtractor.processIndices(idx -> BitMaps.contains(bitMap, idx));
     }
 
@@ -214,13 +227,38 @@ public final class SimpleBloomFilter implements BloomFilter<SimpleBloomFilter> {
     @Override
     public boolean merge(final IndexExtractor indexExtractor) {
         Objects.requireNonNull(indexExtractor, "indexExtractor");
-        indexExtractor.processIndices(idx -> {
-            if (idx < 0 || idx >= shape.getNumberOfBits()) {
-                throw new IllegalArgumentException(String.format("IndexExtractor should only send values in the range[0,%s)", shape.getNumberOfBits()));
+        if (indexExtractor instanceof SimpleBloomFilter) {
+            final long[] other = ((SimpleBloomFilter) indexExtractor).bitMap;
+            final int limit = shape.getNumberOfBits();
+            for (int i = 0; i < other.length; i++) {
+                final long word = other[i];
+                if (word == 0) {
+                    continue;
+                }
+                final int remaining = limit - (i << 6);
+                if (remaining >= Long.SIZE) {
+                    bitMap[i] |= word;
+                } else {
+                    final long allowed = remaining > 0 ? (1L << remaining) - 1L : 0L;
+                    if (remaining > 0) {
+                        // Valid low indices were applied before the first invalid high bit.
+                        bitMap[i] |= word & allowed;
+                    }
+                    if ((word & ~allowed) != 0) {
+                        throw new IllegalArgumentException(String.format(
+                                "IndexExtractor should only send values in the range[0,%s)", limit));
+                    }
+                }
             }
-            BitMaps.set(bitMap, idx);
-            return true;
-        });
+        } else {
+            indexExtractor.processIndices(idx -> {
+                if (idx < 0 || idx >= shape.getNumberOfBits()) {
+                    throw new IllegalArgumentException(String.format("IndexExtractor should only send values in the range[0,%s)", shape.getNumberOfBits()));
+                }
+                BitMaps.set(bitMap, idx);
+                return true;
+            });
+        }
         cardinality = -1;
         return true;
     }

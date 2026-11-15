@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 // Modified 2026 by Hitesh Soliwal and contributors: sparse lifecycle array hot paths.
+// Modified 2026 by Synexia contributors: sorted-lane bulk union without per-key tree updates.
 package com.m3.collections.apache.bloomfilter;
 
 import java.util.Arrays;
@@ -72,11 +73,23 @@ public final class SparseBloomFilter implements BloomFilter<SparseBloomFilter> {
 
         /** Publishes every lane only after all allocations have succeeded. */
         private void grow() {
-            final long proposed = Math.max(8L, keys.length + (long) (keys.length >>> 1));
-            final int capacity = (int) Math.min(Integer.MAX_VALUE - 8L, proposed);
-            if (capacity <= keys.length) {
+            reserve((long) size + 1L);
+        }
+
+        /** Retain the geometric endpoint, without allocating intermediate generations. */
+        private void reserve(final long required) {
+            if (required <= keys.length) {
+                return;
+            }
+            final long maximum = Integer.MAX_VALUE - 8L;
+            if (required > maximum) {
                 throw new OutOfMemoryError("SparseBloomFilter slot capacity exhausted");
             }
+            long proposed = keys.length;
+            do {
+                proposed = Math.min(maximum, Math.max(8L, proposed + (proposed >>> 1)));
+            } while (proposed < required);
+            final int capacity = (int) proposed;
             final int[] newKeys = Arrays.copyOf(keys, capacity);
             final int[] newLeft = Arrays.copyOf(left, capacity);
             final int[] newRight = Arrays.copyOf(right, capacity);
@@ -197,6 +210,80 @@ public final class SparseBloomFilter implements BloomFilter<SparseBloomFilter> {
         private void add(final int key) {
             final int result = insert(root, key, NONE, NONE);
             root = result < 0 ? ~result : result;
+        }
+
+        /** Merge large exact-peer batches through the existing sorted successor lane. */
+        private void addAll(final IndexStore other) {
+            if (other == this || other.size == 0) {
+                return;
+            }
+            final int expectedModCount = other.modCount;
+            // Keep tree insertion for small batches where a full receiver scan costs more.
+            if (other.size < 32 || (size != 0
+                    && (long) other.size * (height(root) + 1) < (long) size + other.size)) {
+                for (int source = other.first; source != NONE; source = other.next[source]) {
+                    add(other.keys[source]);
+                    if (other.modCount != expectedModCount) {
+                        throw new ConcurrentModificationException();
+                    }
+                }
+                return;
+            }
+            int current = first;
+            int missing = 0;
+            for (int source = other.first; source != NONE; source = other.next[source]) {
+                final int key = other.keys[source];
+                while (current != NONE && keys[current] < key) {
+                    current = next[current];
+                }
+                if (current == NONE || keys[current] != key) {
+                    missing++;
+                }
+                if (other.modCount != expectedModCount) {
+                    throw new ConcurrentModificationException();
+                }
+            }
+            if (missing == 0) {
+                return;
+            }
+            // All lanes are allocated before publication; no scratch nodes or key copies.
+            reserve((long) size + missing);
+            current = first;
+            int previous = NONE;
+            for (int source = other.first; source != NONE; source = other.next[source]) {
+                final int key = other.keys[source];
+                while (current != NONE && keys[current] < key) {
+                    previous = current;
+                    current = next[current];
+                }
+                if (current != NONE && keys[current] == key) {
+                    previous = current;
+                    current = next[current];
+                } else {
+                    previous = newLeaf(key, previous, current);
+                }
+                if (other.modCount != expectedModCount) {
+                    // No caller callbacks run here; concurrent use remains unsupported.
+                    root = (int) (rebuild(first, size) >>> 32);
+                    throw new ConcurrentModificationException();
+                }
+            }
+            root = (int) (rebuild(first, size) >>> 32);
+        }
+
+        /** Pack the balanced root and first unconsumed successor into one primitive. */
+        private long rebuild(final int cursor, final int count) {
+            if (count == 0) {
+                return ((long) NONE << 32) | (cursor & 0xffffffffL);
+            }
+            final int leftSize = count >>> 1;
+            final long prefix = rebuild(cursor, leftSize);
+            final int slot = (int) prefix;
+            final long suffix = rebuild(next[slot], count - leftSize - 1);
+            left[slot] = (int) (prefix >>> 32);
+            right[slot] = (int) (suffix >>> 32);
+            recalcHeight(slot);
+            return ((long) slot << 32) | (suffix & 0xffffffffL);
         }
 
         private boolean contains(final int key) {
@@ -429,7 +516,12 @@ public final class SparseBloomFilter implements BloomFilter<SparseBloomFilter> {
     @Override
     public boolean merge(final IndexExtractor indexExtractor) {
         Objects.requireNonNull(indexExtractor, "indexExtractor");
-        indexExtractor.processIndices(this::add);
+        if (indexExtractor instanceof SparseBloomFilter) {
+            indices.addAll(((SparseBloomFilter) indexExtractor).indices);
+        } else {
+            indexExtractor.processIndices(this::add);
+        }
+
         if (!indices.isEmpty()) {
             if (indices.keys[indices.last] >= shape.getNumberOfBits()) {
                 throw new IllegalArgumentException(String.format("Value in list %s is greater than maximum value (%s)",

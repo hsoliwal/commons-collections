@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+// Modified 2026 by Synexia contributors: unsigned power-of-two modulus mask.
 package com.m3.collections.apache.bloomfilter;
 
 /**
@@ -104,6 +105,13 @@ public class BitMaps {
      * @see Long#remainderUnsigned(long, long)
      */
     public static int mod(final long dividend, final int divisor) {
+        // A power-of-two modulus is a mask, even when the dividend is a
+        // negative signed long representing a large unsigned value. Keep
+        // the original division path for zero (including its exception)
+        // and for every other divisor.
+        if (divisor > 0 && (divisor & (divisor - 1)) == 0) {
+            return (int) (dividend & (divisor - 1L));
+        }
         // See Hacker's Delight (2nd ed), section 9.3.
         // Assume divisor is positive.
         // Divide half the unsigned number and then double the quotient result.
