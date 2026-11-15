@@ -14,9 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+// Modified 2026-11-15 by Hitesh Soliwal and Synexia contributors: own iterator metadata arrays.
 package com.m3.collections.apache.iterators;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -73,12 +75,15 @@ public class CartesianProductIterator<E> implements Iterator<List<E>> {
     /**
      * The iterables to create the Cartesian product from.
      */
-    private final List<Iterable<? extends E>> iterables;
+    private final Iterable<? extends E>[] iterables;
 
     /**
      * The iterators to generate the Cartesian product tuple from.
      */
-    private final List<Iterator<? extends E>> iterators;
+    private final Iterator<? extends E>[] iterators;
+
+    /** The number of active input iterators, or zero for an empty product. */
+    private final int iteratorCount;
 
     /**
      * The previous generated tuple of elements.
@@ -92,20 +97,24 @@ public class CartesianProductIterator<E> implements Iterator<List<E>> {
      * @throws NullPointerException if any of the iterables is null
      */
     @SafeVarargs
+    @SuppressWarnings("unchecked")
     public CartesianProductIterator(final Iterable<? extends E>... iterables) {
         Objects.requireNonNull(iterables, "iterables");
-        this.iterables = new ArrayList<>(iterables.length);
-        this.iterators = new ArrayList<>(iterables.length);
+        this.iterables = (Iterable<? extends E>[]) new Iterable<?>[iterables.length];
+        this.iterators = (Iterator<? extends E>[]) new Iterator<?>[iterables.length];
+        int count = 0;
         for (final Iterable<? extends E> iterable : iterables) {
             Objects.requireNonNull(iterable, "iterable");
-            this.iterables.add(iterable);
+            this.iterables[count] = iterable;
             final Iterator<? extends E> iterator = iterable.iterator();
             if (!iterator.hasNext()) {
-                iterators.clear();
+                Arrays.fill(this.iterators, 0, count, null);
+                count = 0;
                 break;
             }
-            iterators.add(iterator);
+            this.iterators[count++] = iterator;
         }
+        iteratorCount = count;
     }
 
     /**
@@ -115,7 +124,12 @@ public class CartesianProductIterator<E> implements Iterator<List<E>> {
      */
     @Override
     public boolean hasNext() {
-        return iterators.stream().anyMatch(Iterator::hasNext);
+        for (int i = 0; i < iteratorCount; i++) {
+            if (iterators[i].hasNext()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -130,20 +144,20 @@ public class CartesianProductIterator<E> implements Iterator<List<E>> {
             throw new NoSuchElementException();
         }
         if (previousTuple == null) {
-            previousTuple = new ArrayList<>(iterables.size());
-            for (final Iterator<? extends E> iterator : iterators) {
-                previousTuple.add(iterator.next());
+            previousTuple = new ArrayList<>(iterables.length);
+            for (int i = 0; i < iteratorCount; i++) {
+                previousTuple.add(iterators[i].next());
             }
             return new ArrayList<>(previousTuple);
         }
-        for (int i = iterators.size() - 1; i >= 0; i--) {
-            Iterator<? extends E> iterator = iterators.get(i);
+        for (int i = iteratorCount - 1; i >= 0; i--) {
+            Iterator<? extends E> iterator = iterators[i];
             if (iterator.hasNext()) {
                 previousTuple.set(i, iterator.next());
                 return new ArrayList<>(previousTuple);
             }
-            iterator = iterables.get(i).iterator();
-            iterators.set(i, iterator);
+            iterator = iterables[i].iterator();
+            iterators[i] = iterator;
             previousTuple.set(i, iterator.next());
         }
         throw new IllegalStateException("reached unreachable code");

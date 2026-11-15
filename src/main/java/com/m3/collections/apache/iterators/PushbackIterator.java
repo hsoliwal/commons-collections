@@ -14,10 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+// Modified 2026-11-15 by Hitesh Soliwal and Synexia contributors: defer and own pushback storage.
 package com.m3.collections.apache.iterators;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Objects;
 
@@ -36,6 +36,9 @@ import java.util.Objects;
  * @since 4.0
  */
 public class PushbackIterator<E> implements Iterator<E> {
+
+    /** Shared storage before an item is pushed back. */
+    private static final Object[] EMPTY_ITEMS = new Object[0];
 
     /**
      * Decorates the specified iterator to support one-element lookahead.
@@ -61,8 +64,11 @@ public class PushbackIterator<E> implements Iterator<E> {
     /** The iterator being decorated. */
     private final Iterator<? extends E> iterator;
 
-    /** The LIFO queue containing the pushed back items. */
-    private final Deque<E> items = new ArrayDeque<>();
+    /** The owned LIFO storage containing the pushed back items. */
+    private Object[] items = EMPTY_ITEMS;
+
+    /** The number of pushed back items. */
+    private int itemCount;
 
     /**
      * Constructs a new instance.
@@ -75,12 +81,18 @@ public class PushbackIterator<E> implements Iterator<E> {
 
     @Override
     public boolean hasNext() {
-        return !items.isEmpty() || iterator.hasNext();
+        return itemCount != 0 || iterator.hasNext();
     }
 
     @Override
     public E next() {
-        return !items.isEmpty() ? items.pop() : iterator.next();
+        if (itemCount == 0) {
+            return iterator.next();
+        }
+        @SuppressWarnings("unchecked")
+        final E item = (E) items[--itemCount];
+        items[itemCount] = null;
+        return item;
     }
 
     /**
@@ -92,7 +104,18 @@ public class PushbackIterator<E> implements Iterator<E> {
      * @param item  The element to push back to the iterator
      */
     public void pushback(final E item) {
-        items.push(item);
+        Objects.requireNonNull(item);
+        if (itemCount == items.length) {
+            final long required = (long) itemCount + 1;
+            final long maximum = Integer.MAX_VALUE - 8L;
+            if (required > maximum) {
+                throw new OutOfMemoryError("PushbackIterator item capacity exhausted");
+            }
+            final int capacity = (int) Math.min(maximum,
+                    Math.max(required, Math.max(8L, (long) items.length + (items.length >>> 1))));
+            items = Arrays.copyOf(items, capacity);
+        }
+        items[itemCount++] = item;
     }
 
     /**
