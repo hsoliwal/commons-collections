@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 // Modified 2026-11-13 by Hitesh Soliwal and Synexia contributors: direct array/bitmap hot paths.
+// Modified 2026-11-15 by Hitesh Soliwal and contributors: bounded array snapshots.
 package com.m3.collections.apache.bloomfilter;
 
 import java.util.Arrays;
@@ -70,6 +71,42 @@ public final class SimpleBloomFilter implements BloomFilter<SimpleBloomFilter> {
     @Override
     public long[] asBitMapArray() {
         return Arrays.copyOf(bitMap, bitMap.length);
+    }
+
+    /** Copies enabled indices without a growing intermediate accumulator. */
+    @Override
+    public int[] asIndexArray() {
+        // Failed merges can leave cardinality stale. Count the actual words
+        // without changing that existing observable cache state.
+        long count = 0;
+        int occupiedWord = -1;
+        for (int i = 0; i < bitMap.length; i++) {
+            final long word = bitMap[i];
+            if (word != 0) {
+                count += Long.bitCount(word);
+                occupiedWord = i;
+            }
+        }
+        if (count > Integer.MAX_VALUE) {
+            throw new OutOfMemoryError("SimpleBloomFilter index array capacity exhausted");
+        }
+        final int[] result = new int[(int) count];
+        if (count != 0) {
+            int offset = 0;
+            // A single occupied word needs no second scan over empty words.
+            final int firstWord = count == Long.bitCount(bitMap[occupiedWord]) ? occupiedWord : 0;
+            for (int i = firstWord; i < bitMap.length; i++) {
+                long word = bitMap[i];
+                while (word != 0) {
+                    result[offset++] = (i << 6) + Long.numberOfTrailingZeros(word);
+                    word &= word - 1;
+                }
+                if (offset == result.length) {
+                    break;
+                }
+            }
+        }
+        return result;
     }
 
     @Override

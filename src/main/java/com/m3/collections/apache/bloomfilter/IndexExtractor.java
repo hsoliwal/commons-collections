@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 // Modified 2026-11-13 by Hitesh Soliwal and Synexia contributors: direct array/bitmap hot paths.
+// Modified 2026-11-15 by Hitesh Soliwal and contributors: bounded array snapshots.
 package com.m3.collections.apache.bloomfilter;
 
 import java.util.Arrays;
@@ -86,6 +87,76 @@ public interface IndexExtractor {
                     }
                 }
                 return true;
+            }
+
+            @Override
+            public IndexExtractor uniqueIndices() {
+                if (values == null || values.length == 0) {
+                    return IndexExtractor.super.uniqueIndices();
+                }
+                int maximum = 0;
+                int minimum = Integer.MAX_VALUE;
+                for (final int value : values) {
+                    minimum = Math.min(minimum, value);
+                    maximum = Math.max(maximum, value);
+                }
+                if (minimum < 0 || maximum == Integer.MAX_VALUE) {
+                    // Preserve default rejection and overflow-boundary behavior.
+                    return IndexExtractor.super.uniqueIndices();
+                }
+                if ((long) maximum <= (long) values.length * Long.SIZE) {
+                    // Dense inputs retain the bitmap algorithm without growing it.
+                    final BitSet bitSet = new BitSet(maximum + 1);
+                    for (final int value : values) {
+                        bitSet.set(value);
+                    }
+                    return new IndexExtractor() {
+                        @Override
+                        public boolean processIndices(final IntPredicate predicate) {
+                            for (int idx = bitSet.nextSetBit(0); idx >= 0; idx = bitSet.nextSetBit(idx + 1)) {
+                                if (!predicate.test(idx)) {
+                                    return false;
+                                }
+                            }
+                            return true;
+                        }
+
+                        @Override
+                        public IndexExtractor uniqueIndices() {
+                            return this;
+                        }
+                    };
+                }
+                final int[] sorted = values.clone();
+                Arrays.sort(sorted);
+                int distinct = 0;
+                for (final int value : sorted) {
+                    if (distinct == 0 || value != sorted[distinct - 1]) {
+                        sorted[distinct++] = value;
+                    }
+                }
+                final int[] unique = distinct == sorted.length ? sorted : Arrays.copyOf(sorted, distinct);
+                return new IndexExtractor() {
+                    @Override
+                    public int[] asIndexArray() {
+                        return unique.clone();
+                    }
+
+                    @Override
+                    public boolean processIndices(final IntPredicate predicate) {
+                        for (final int value : unique) {
+                            if (!predicate.test(value)) {
+                                return false;
+                            }
+                        }
+                        return true;
+                    }
+
+                    @Override
+                    public IndexExtractor uniqueIndices() {
+                        return this;
+                    }
+                };
             }
         };
     }
