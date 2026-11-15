@@ -16,15 +16,14 @@
  */
 // Modified 2026 by Hitesh Soliwal and Contributors to the Synexia Project:
 // array-backed pending iterator storage with preserved admission boundaries.
+// Modified 2026 by Synexia contributors: owner-indexed pending iterator storage.
 package com.m3.collections.apache.iterators;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.Objects;
-import java.util.Queue;
 
 /**
  * An IteratorChain is an Iterator that wraps a number of Iterators.
@@ -60,8 +59,13 @@ import java.util.Queue;
  */
 public class IteratorChain<E> implements Iterator<E> {
 
-    /** The chain of iterators */
-    private final Queue<Iterator<? extends E>> iteratorQueue = new ArrayDeque<>();
+    /** Shared empty storage; no deque or payload array is allocated by an empty chain. */
+    private static final Iterator<?>[] EMPTY_ITERATORS = new Iterator<?>[0];
+
+    /** Parent-owned pending iterators, in the live span starting at queueHead. */
+    private Iterator<?>[] iteratorQueue = EMPTY_ITERATORS;
+    private int queueHead;
+    private int queueSize;
 
     /** The current iterator */
     private Iterator<? extends E> currentIterator;
@@ -179,46 +183,81 @@ public class IteratorChain<E> implements Iterator<E> {
                 // in case it is an IteratorChain, wrap every underlying iterators as unmodifiable
                 // multiple rechainings would otherwise lead to exponential growing number of function calls
                 // when the iteratorChain gets used.
-                appendUnmodifiableIterators(((IteratorChain<? extends E>) underlyingIterator).iteratorQueue);
+                appendUnmodifiableIterators((IteratorChain<? extends E>) underlyingIterator);
             } else {
                 // we don't know anything about the underlying iterator, simply add it here
-                iteratorQueue.add(iterator);
+                appendIterator(iterator);
             }
         } else if (iterator instanceof IteratorChain) {
             // add the wrapped iterators directly instead of reusing the given instance
             // multiple rechainings would otherwise lead to exponential growing number of function calls
             // when the iteratorChain gets used.
-            appendIterators(((IteratorChain<? extends E>) iterator).iteratorQueue);
+            appendIterators((IteratorChain<? extends E>) iterator);
         } else {
             // arbitrary other iterator
-            iteratorQueue.add(iterator);
+            appendIterator(iterator);
         }
     }
 
-    /**
-     * Appends pending child iterators, snapshotting only a self-admission.
-     * Array-backed storage must preserve the old queue's finite self-add operation.
-     *
-     * @param pending The pending child iterators.
-     */
-    private void appendIterators(final Queue<? extends Iterator<? extends E>> pending) {
-        iteratorQueue.addAll(pending == iteratorQueue ? new ArrayList<>(pending) : pending);
+    /** Reserve the pending span before publishing any new child. */
+    private void reservePending(final long required) {
+        if (required <= iteratorQueue.length - queueHead) {
+            return;
+        }
+        if (required <= iteratorQueue.length) {
+            System.arraycopy(iteratorQueue, queueHead, iteratorQueue, 0, queueSize);
+            Arrays.fill(iteratorQueue, queueSize, queueHead + queueSize, null);
+        } else {
+            final long maximum = Integer.MAX_VALUE - 8L;
+            if (required > maximum) {
+                throw new OutOfMemoryError("IteratorChain pending capacity exhausted");
+            }
+            final int capacity = (int) Math.min(maximum, Math.max(required,
+                    Math.max(8L, iteratorQueue.length + (iteratorQueue.length >>> 1))));
+            final Iterator<?>[] grown = new Iterator<?>[capacity];
+            System.arraycopy(iteratorQueue, queueHead, grown, 0, queueSize);
+            iteratorQueue = grown;
+        }
+        queueHead = 0;
     }
 
-    /**
-     * Preserves unmodifiable child admission and its existing partial-mutation
-     * boundary when the source chain is this chain itself.
-     *
-     * @param pending The pending child iterators.
-     */
-    private void appendUnmodifiableIterators(final Queue<? extends Iterator<? extends E>> pending) {
-        for (final Iterator<? extends E> nestedIterator : pending) {
-            iteratorQueue.add(UnmodifiableIterator.unmodifiableIterator(nestedIterator));
-            if (pending == iteratorQueue) {
-                // The former linked queue admitted one child, then refused its changed iterator.
+    private void appendIterator(final Iterator<? extends E> iterator) {
+        reservePending((long) queueSize + 1L);
+        iteratorQueue[queueHead + queueSize++] = iterator;
+    }
+
+    /** Arraycopy handles self-admission without a temporary snapshot. */
+    private void appendIterators(final IteratorChain<? extends E> pending) {
+        final int count = pending.queueSize;
+        reservePending((long) queueSize + count);
+        System.arraycopy(pending.iteratorQueue, pending.queueHead,
+                iteratorQueue, queueHead + queueSize, count);
+        queueSize += count;
+    }
+
+    /** Preserve the original one-child partial mutation on unmodifiable self-admission. */
+    private void appendUnmodifiableIterators(final IteratorChain<? extends E> pending) {
+        final int count = pending.queueSize;
+        for (int i = 0; i < count; i++) {
+            appendIterator(UnmodifiableIterator.unmodifiableIterator(pending.pendingAt(i)));
+            if (pending == this) {
                 throw new ConcurrentModificationException();
             }
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Iterator<? extends E> pendingAt(final int index) {
+        return (Iterator<? extends E>) iteratorQueue[queueHead + index];
+    }
+
+    private Iterator<? extends E> removePending() {
+        final Iterator<? extends E> iterator = pendingAt(0);
+        iteratorQueue[queueHead++] = null;
+        if (--queueSize == 0) {
+            queueHead = 0;
+        }
+        return iterator;
     }
 
     /**
@@ -312,7 +351,7 @@ public class IteratorChain<E> implements Iterator<E> {
      * @return Iterator count
      */
     public int size() {
-        return iteratorQueue.size();
+        return queueSize;
     }
 
     /**
@@ -321,10 +360,10 @@ public class IteratorChain<E> implements Iterator<E> {
      */
     protected void updateCurrentIterator() {
         if (currentIterator == null) {
-            if (iteratorQueue.isEmpty()) {
+            if (queueSize == 0) {
                 currentIterator = EmptyIterator.<E>emptyIterator();
             } else {
-                currentIterator = iteratorQueue.remove();
+                currentIterator = removePending();
             }
         }
         while (true) {
@@ -332,10 +371,10 @@ public class IteratorChain<E> implements Iterator<E> {
             if (cachedHasNextValue) {
                 break;
             }
-            if (iteratorQueue.isEmpty()) {
+            if (queueSize == 0) {
                 break;
             }
-            currentIterator = iteratorQueue.remove();
+            currentIterator = removePending();
         }
     }
 }
