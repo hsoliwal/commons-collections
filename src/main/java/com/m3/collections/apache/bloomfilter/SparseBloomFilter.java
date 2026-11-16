@@ -273,47 +273,46 @@ public final class SparseBloomFilter implements BloomFilter<SparseBloomFilter> {
         }
 
         /**
-         * Exact dense sources enumerate unique ascending indices. The first sweep
-         * counts only missing slots; the second splices their values into the
-         * owner-held successor lane before a single rank-independent AVL rebuild.
-         * No temporary key, entry, or node arrays are retained or allocated.
+         * Scan exact dense peers by primitive word directly, then splice missing
+         * keys into the owner-held sorted successor lane. No mutable bitmaps,
+         * retained scratch arrays, node objects or callback dispatch escape.
          */
         private void addAll(final SimpleBloomFilter other) {
             final int count = other.cardinality();
-            if (count < 32 || (size != 0 && (long) count * (height(root) + 1) < (long) size + count)) {
+            final int words = BitMaps.numberOfBitMaps(other.getShape());
+            if (count < 32 || (long) words > (long) count * 2L
+                    || (size != 0 && (long) count * (height(root) + 1) < (long) size + count)) {
                 other.processIndices(value -> {
                     add(value);
                     return true;
                 });
                 return;
             }
-            final class Missing implements IntPredicate {
-                private int current = first;
-                private int missing;
-
-                @Override
-                public boolean test(final int key) {
+            int current = first;
+            int missing = 0;
+            for (int wordIndex = 0; wordIndex < words; wordIndex++) {
+                long word = other.wordAt(wordIndex);
+                while (word != 0L) {
+                    final int key = (wordIndex << 6) + Long.numberOfTrailingZeros(word);
                     while (current != NONE && keys[current] < key) {
                         current = next[current];
                     }
                     if (current == NONE || keys[current] != key) {
                         missing++;
                     }
-                    return true;
+                    word &= word - 1;
                 }
             }
-            final Missing pass = new Missing();
-            other.processIndices(pass);
-            if (pass.missing == 0) {
+            if (missing == 0) {
                 return;
             }
-            reserve((long) size + pass.missing);
-            final class Insert implements IntPredicate {
-                private int current = first;
-                private int previous = NONE;
-
-                @Override
-                public boolean test(final int key) {
+            reserve((long) size + missing);
+            current = first;
+            int previous = NONE;
+            for (int wordIndex = 0; wordIndex < words; wordIndex++) {
+                long word = other.wordAt(wordIndex);
+                while (word != 0L) {
+                    final int key = (wordIndex << 6) + Long.numberOfTrailingZeros(word);
                     while (current != NONE && keys[current] < key) {
                         previous = current;
                         current = next[current];
@@ -324,27 +323,30 @@ public final class SparseBloomFilter implements BloomFilter<SparseBloomFilter> {
                     } else {
                         previous = newLeaf(key, previous, current);
                     }
-                    return true;
+                    word &= word - 1;
                 }
             }
-            other.processIndices(new Insert());
             root = (int) (rebuild(first, size) >>> 32);
         }
 
-        /** Ascending bitmap indices use a single monotone successor scan. */
+        /** Ordered bitmap words use one monotone successor scan. */
         private boolean containsAll(final SimpleBloomFilter other) {
-            final class Match implements IntPredicate {
-                private int current = first;
-
-                @Override
-                public boolean test(final int key) {
+            int current = first;
+            final int words = BitMaps.numberOfBitMaps(other.getShape());
+            for (int wordIndex = 0; wordIndex < words; wordIndex++) {
+                long word = other.wordAt(wordIndex);
+                while (word != 0L) {
+                    final int key = (wordIndex << 6) + Long.numberOfTrailingZeros(word);
                     while (current != NONE && keys[current] < key) {
                         current = next[current];
                     }
-                    return current != NONE && keys[current] == key;
+                    if (current == NONE || keys[current] != key) {
+                        return false;
+                    }
+                    word &= word - 1;
                 }
             }
-            return other.processIndices(new Match());
+            return true;
         }
 
         /** Pack the balanced root and first unconsumed successor into one primitive. */
@@ -551,6 +553,7 @@ public final class SparseBloomFilter implements BloomFilter<SparseBloomFilter> {
             final SimpleBloomFilter other = (SimpleBloomFilter) indexExtractor;
             final int count = other.cardinality();
             if (count >= 32 && indices.size > 0
+                    && (long) BitMaps.numberOfBitMaps(other.getShape()) <= (long) count * 2L
                     && (long) count * (indices.height(indices.root) + 1) >= (long) indices.size + count) {
                 return indices.containsAll(other);
             }
