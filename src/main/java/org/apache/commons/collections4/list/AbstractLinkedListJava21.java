@@ -783,6 +783,10 @@ public abstract class AbstractLinkedListJava21<E> implements List<E> {
         }
         final ListIterator<?> it1 = listIterator();
         final ListIterator<?> it2 = other.listIterator();
+        return equalsRest(it1, it2);
+    }
+
+    private static boolean equalsRest(final ListIterator<?> it1, final ListIterator<?> it2) {
         while (it1.hasNext() && it2.hasNext()) {
             if (!Objects.equals(it1.next(), it2.next())) {
                 return false;
@@ -1097,6 +1101,10 @@ public abstract class AbstractLinkedListJava21<E> implements List<E> {
         for (Node<E> node = header.next; node != header; node = node.next, i++) {
             array[i] = (T) node.getValue();
         }
+        return toArrayRest(array);
+    }
+
+    private <T> T[] toArrayRest(T[] array) {
         // Set the value after the last value to null
         if (array.length > size) {
             array[size] = null;
@@ -1113,7 +1121,11 @@ public abstract class AbstractLinkedListJava21<E> implements List<E> {
         buf.append(CollectionUtils.DEFAULT_TOSTRING_PREFIX);
 
         final Iterator<E> it = iterator();
-        boolean hasNext = it.hasNext();
+        final boolean hasNext = it.hasNext();
+        return toStringRest(hasNext, it, buf);
+    }
+
+    private String toStringRest(boolean hasNext, final Iterator<E> it, final StringBuilder buf) {
         while (hasNext) {
             final Object value = it.next();
             buf.append(value == this ? "(this Collection)" : value);

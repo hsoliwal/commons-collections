@@ -337,6 +337,11 @@ public class ListUtils {
             larger = list1;
         }
         final HashSet<E> hashSet = new HashSet<>(smaller);
+        return intersectionRest(larger, hashSet, result);
+    }
+
+    private static <E> List<E> intersectionRest(List<? extends E> larger, final HashSet<E> hashSet,
+            final List<E> result) {
         for (final E e : larger) {
             if (hashSet.contains(e)) {
                 result.add(e);
@@ -377,6 +382,10 @@ public class ListUtils {
         }
         final Iterator<?> it1 = list1.iterator();
         final Iterator<?> it2 = list2.iterator();
+        return isEqualListRest(it1, it2);
+    }
+
+    private static boolean isEqualListRest(final Iterator<?> it1, final Iterator<?> it2) {
         while (it1.hasNext() && it2.hasNext()) {
             final Object obj1 = it1.next();
             final Object obj2 = it2.next();

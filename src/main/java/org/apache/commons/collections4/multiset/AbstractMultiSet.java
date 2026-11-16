@@ -388,6 +388,10 @@ public abstract class AbstractMultiSet<E> extends AbstractCollection<E> implemen
         if (other.size() != size()) {
             return false;
         }
+        return equalsRest(other);
+    }
+
+    private boolean equalsRest(final MultiSet<?> other) {
         for (final Entry<E> entry : entrySet()) {
             if (other.getCount(entry.getElement()) != getCount(entry.getElement())) {
                 return false;

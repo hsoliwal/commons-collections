@@ -207,6 +207,10 @@ public class LayerManager<T extends BloomFilter<T>> implements BloomFilterExtrac
             if (breakAt <= 0) {
                 throw new IllegalArgumentException("'breakAt' must be greater than 0");
             }
+            return advanceOnCountRest(breakAt);
+        }
+
+        private static <T extends BloomFilter<T>> Predicate<LayerManager<T>> advanceOnCountRest(final int breakAt) {
             return new Predicate<LayerManager<T>>() {
                 int count;
 

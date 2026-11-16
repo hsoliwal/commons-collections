@@ -262,6 +262,10 @@ public final class ArrayCountingBloomFilter implements CountingBloomFilter {
                         return cells[bitIndex + Long.numberOfTrailingZeros(missing)] != 0;
                     }
                 }
+                return testRest();
+            }
+
+            private boolean testRest() {
                 // A producer may ignore false and call this predicate again. Advance
                 // only after a successful word, exactly as the index adapter does.
                 bitIndex += Long.SIZE;
@@ -408,6 +412,10 @@ public final class ArrayCountingBloomFilter implements CountingBloomFilter {
             }
             return true;
         }
+        return processIndicesRest(consumer);
+    }
+
+    private boolean processIndicesRest(final IntPredicate consumer) {
         for (int word = 0; word < nonzeroMask.length; word++) {
             long remaining = nonzeroMask[word];
             while (remaining != 0) {

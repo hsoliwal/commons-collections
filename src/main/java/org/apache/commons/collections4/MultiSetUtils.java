@@ -176,7 +176,12 @@ public class MultiSetUtils {
             multiSetToModify.clear();
             return changed;
         }
-        boolean changed = false;
+        final boolean changed = false;
+        return removeOccurrencesRest(occurrencesToRemove, multiSetToModify, changed);
+    }
+
+    private static boolean removeOccurrencesRest(final MultiSet<?> occurrencesToRemove,
+            final MultiSet<?> multiSetToModify, boolean changed) {
         // snapshot the entries to avoid ConcurrentModificationException when
         // occurrencesToRemove is a view backed by multiSetToModify
         for (final MultiSet.Entry<?> entry : new ArrayList<>(occurrencesToRemove.entrySet())) {

@@ -615,6 +615,10 @@ public class ListOrderedMap<K, V>
         }
 
         final Map<K, V> m = decorated();
+        return putRest(m, key, index, value);
+    }
+
+    private V putRest(final Map<K, V> m, final K key, int index, final V value) {
         if (m.containsKey(key)) {
             final V result = m.remove(key);
             final int pos = insertOrder.indexOf(key);
@@ -627,6 +631,10 @@ public class ListOrderedMap<K, V>
             return result;
         }
         insertOrder.add(index, key);
+        return putRest2(m, key, value);
+    }
+
+    private V putRest2(final Map<K, V> m, final K key, final V value) {
         m.put(key, value);
         return null;
     }
@@ -742,7 +750,11 @@ public class ListOrderedMap<K, V>
         }
         final StringBuilder buf = new StringBuilder();
         buf.append('{');
-        boolean first = true;
+        final boolean first = true;
+        return toStringRest(first, buf);
+    }
+
+    private String toStringRest(boolean first, final StringBuilder buf) {
         for (final Map.Entry<K, V> entry : entrySet()) {
             final K key = entry.getKey();
             final V value = entry.getValue();
@@ -755,6 +767,10 @@ public class ListOrderedMap<K, V>
             buf.append('=');
             buf.append(value == this ? "(this Map)" : value);
         }
+        return toStringRest2(buf);
+    }
+
+    private static String toStringRest2(final StringBuilder buf) {
         buf.append('}');
         return buf.toString();
     }

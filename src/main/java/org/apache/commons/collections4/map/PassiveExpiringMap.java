@@ -151,7 +151,10 @@ public class PassiveExpiringMap<K, V>
                 // timeToLiveMillis in the future
                 return nowMillis + timeToLiveMillis;
             }
+            return expirationTimeRest();
+        }
 
+        private static long expirationTimeRest() {
             // never expire
             return -1L;
         }

@@ -378,6 +378,10 @@ public class MultiKeyMap<K, V> extends AbstractMapDecorator<MultiKey<? extends K
         }
         h += ~(h << 9);
         h ^=  h >>> 14;
+        return hashRest3(h);
+    }
+
+    private static int hashRest3(int h) {
         h +=  h << 4;
         h ^=  h >>> 10;
         return h;
@@ -403,6 +407,10 @@ public class MultiKeyMap<K, V> extends AbstractMapDecorator<MultiKey<? extends K
         if (key3 != null) {
             h ^= key3.hashCode();
         }
+        return hashRest2(key4, h);
+    }
+
+    private static int hashRest2(final Object key4, int h) {
         if (key4 != null) {
             h ^= key4.hashCode();
         }
@@ -434,6 +442,10 @@ public class MultiKeyMap<K, V> extends AbstractMapDecorator<MultiKey<? extends K
         if (key3 != null) {
             h ^= key3.hashCode();
         }
+        return hashRest(key4, h, key5);
+    }
+
+    private static int hashRest(final Object key4, int h, final Object key5) {
         if (key4 != null) {
             h ^= key4.hashCode();
         }
@@ -771,8 +783,13 @@ public class MultiKeyMap<K, V> extends AbstractMapDecorator<MultiKey<? extends K
      * @return true if any elements were removed
      */
     public boolean removeAll(final Object key1, final Object key2, final Object key3, final Object key4) {
-        boolean modified = false;
+        final boolean modified = false;
         final MapIterator<MultiKey<? extends K>, V> it = mapIterator();
+        return removeAllRest(it, key1, key2, key3, key4, modified);
+    }
+
+    private boolean removeAllRest(final MapIterator<MultiKey<? extends K>, V> it, final Object key1, final Object key2,
+            final Object key3, final Object key4, boolean modified) {
         while (it.hasNext()) {
             final MultiKey<? extends K> multi = it.next();
             if (multi.size() >= 4 &&
@@ -798,8 +815,14 @@ public class MultiKeyMap<K, V> extends AbstractMapDecorator<MultiKey<? extends K
     public V removeMultiKey(final Object key1, final Object key2) {
         final int hashCode = hash(key1, key2);
         final int index = decoratedHashIndex(hashCode);
-        AbstractHashedMap.HashEntry<MultiKey<? extends K>, V> entry = decorated().data[index];
-        AbstractHashedMap.HashEntry<MultiKey<? extends K>, V> previous = null;
+        final AbstractHashedMap.HashEntry<MultiKey<? extends K>, V> entry = decorated().data[index];
+        final AbstractHashedMap.HashEntry<MultiKey<? extends K>, V> previous = null;
+        return removeMultiKeyRest4(entry, hashCode, key1, key2, index, previous);
+    }
+
+    private V removeMultiKeyRest4(AbstractHashedMap.HashEntry<MultiKey<? extends K>, V> entry, final int hashCode,
+            final Object key1, final Object key2, final int index,
+            AbstractHashedMap.HashEntry<MultiKey<? extends K>, V> previous) {
         while (entry != null) {
             if (entry.hashCode == hashCode && isEqualKey(entry, key1, key2)) {
                 final V oldValue = entry.getValue();
@@ -824,8 +847,14 @@ public class MultiKeyMap<K, V> extends AbstractMapDecorator<MultiKey<? extends K
     public V removeMultiKey(final Object key1, final Object key2, final Object key3) {
         final int hashCode = hash(key1, key2, key3);
         final int index = decoratedHashIndex(hashCode);
-        AbstractHashedMap.HashEntry<MultiKey<? extends K>, V> entry = decorated().data[index];
-        AbstractHashedMap.HashEntry<MultiKey<? extends K>, V> previous = null;
+        final AbstractHashedMap.HashEntry<MultiKey<? extends K>, V> entry = decorated().data[index];
+        final AbstractHashedMap.HashEntry<MultiKey<? extends K>, V> previous = null;
+        return removeMultiKeyRest3(entry, hashCode, key1, key2, key3, index, previous);
+    }
+
+    private V removeMultiKeyRest3(AbstractHashedMap.HashEntry<MultiKey<? extends K>, V> entry, final int hashCode,
+            final Object key1, final Object key2, final Object key3, final int index,
+            AbstractHashedMap.HashEntry<MultiKey<? extends K>, V> previous) {
         while (entry != null) {
             if (entry.hashCode == hashCode && isEqualKey(entry, key1, key2, key3)) {
                 final V oldValue = entry.getValue();
@@ -851,8 +880,14 @@ public class MultiKeyMap<K, V> extends AbstractMapDecorator<MultiKey<? extends K
     public V removeMultiKey(final Object key1, final Object key2, final Object key3, final Object key4) {
         final int hashCode = hash(key1, key2, key3, key4);
         final int index = decoratedHashIndex(hashCode);
-        AbstractHashedMap.HashEntry<MultiKey<? extends K>, V> entry = decorated().data[index];
-        AbstractHashedMap.HashEntry<MultiKey<? extends K>, V> previous = null;
+        final AbstractHashedMap.HashEntry<MultiKey<? extends K>, V> entry = decorated().data[index];
+        final AbstractHashedMap.HashEntry<MultiKey<? extends K>, V> previous = null;
+        return removeMultiKeyRest2(entry, hashCode, key1, key2, key3, key4, index, previous);
+    }
+
+    private V removeMultiKeyRest2(AbstractHashedMap.HashEntry<MultiKey<? extends K>, V> entry, final int hashCode,
+            final Object key1, final Object key2, final Object key3, final Object key4, final int index,
+            AbstractHashedMap.HashEntry<MultiKey<? extends K>, V> previous) {
         while (entry != null) {
             if (entry.hashCode == hashCode && isEqualKey(entry, key1, key2, key3, key4)) {
                 final V oldValue = entry.getValue();
@@ -880,8 +915,14 @@ public class MultiKeyMap<K, V> extends AbstractMapDecorator<MultiKey<? extends K
                             final Object key4, final Object key5) {
         final int hashCode = hash(key1, key2, key3, key4, key5);
         final int index = decoratedHashIndex(hashCode);
-        AbstractHashedMap.HashEntry<MultiKey<? extends K>, V> entry = decorated().data[index];
-        AbstractHashedMap.HashEntry<MultiKey<? extends K>, V> previous = null;
+        final AbstractHashedMap.HashEntry<MultiKey<? extends K>, V> entry = decorated().data[index];
+        final AbstractHashedMap.HashEntry<MultiKey<? extends K>, V> previous = null;
+        return removeMultiKeyRest(entry, hashCode, key1, key2, key3, key4, key5, index, previous);
+    }
+
+    private V removeMultiKeyRest(AbstractHashedMap.HashEntry<MultiKey<? extends K>, V> entry, final int hashCode,
+            final Object key1, final Object key2, final Object key3, final Object key4, final Object key5,
+            final int index, AbstractHashedMap.HashEntry<MultiKey<? extends K>, V> previous) {
         while (entry != null) {
             if (entry.hashCode == hashCode && isEqualKey(entry, key1, key2, key3, key4, key5)) {
                 final V oldValue = entry.getValue();

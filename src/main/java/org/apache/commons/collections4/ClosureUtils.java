@@ -331,7 +331,12 @@ public class ClosureUtils {
         final int size = objects.size();
         final Closure<? super E>[] trs = new Closure[size];
         final Predicate<E>[] preds = new Predicate[size];
-        int i = 0;
+        final int i = 0;
+        return switchMapClosureRest(objects, preds, i, trs, def);
+    }
+
+    private static <E> Closure<E> switchMapClosureRest(final Map<? extends E, Closure<E>> objects,
+            final Predicate<E>[] preds, int i, final Closure<? super E>[] trs, final Closure<? super E> def) {
         for (final Map.Entry<? extends E, Closure<E>> entry : objects.entrySet()) {
             preds[i] = EqualPredicate.<E>equalPredicate(entry.getKey());
             trs[i] = entry.getValue();

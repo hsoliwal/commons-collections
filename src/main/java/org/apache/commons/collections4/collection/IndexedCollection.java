@@ -271,6 +271,10 @@ public class IndexedCollection<K, C> extends AbstractCollectionDecorator<C> {
                 changed = true;
             }
         }
+        return removeIfRest(changed);
+    }
+
+    private boolean removeIfRest(boolean changed) {
         if (changed) {
             reindex();
         }

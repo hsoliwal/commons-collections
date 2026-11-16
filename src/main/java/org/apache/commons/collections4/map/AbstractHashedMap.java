@@ -310,8 +310,13 @@ public class AbstractHashedMap<K, V> extends AbstractMap<K, V> implements Iterab
                 throw new NoSuchElementException(NO_NEXT_ENTRY);
             }
             final HashEntry<K, V>[] data = parent.data;
-            int i = hashIndex;
-            HashEntry<K, V> n = newCurrent.next;
+            final int i = hashIndex;
+            final HashEntry<K, V> n = newCurrent.next;
+            return nextEntryRest(n, i, data, newCurrent);
+        }
+
+        private HashEntry<K, V> nextEntryRest(HashEntry<K, V> n, int i, final HashEntry<K, V>[] data,
+                final HashEntry<K, V> newCurrent) {
             while (n == null && i > 0) {
                 n = data[--i];
             }
@@ -954,6 +959,11 @@ public class AbstractHashedMap<K, V> extends AbstractMap<K, V> implements Iterab
         init();
         threshold = calculateThreshold(capacity, loadFactor);
         data = new HashEntry[capacity];
+        doReadObjectRest(size, in);
+    }
+
+    private void doReadObjectRest(final int size, final ObjectInputStream in)
+            throws IOException, ClassNotFoundException {
         for (int i = 0; i < size; i++) {
             final K key = (K) in.readObject();
             final V value = (V) in.readObject();
@@ -1324,7 +1334,10 @@ public class AbstractHashedMap<K, V> extends AbstractMap<K, V> implements Iterab
             }
             entry = entry.next;
         }
+        return putRest(index, hashCode, key, value);
+    }
 
+    private V putRest(final int index, final int hashCode, final K key, final V value) {
         addMapping(index, hashCode, key, value);
         return null;
     }
@@ -1363,8 +1376,13 @@ public class AbstractHashedMap<K, V> extends AbstractMap<K, V> implements Iterab
         key = convertKey(key);
         final int hashCode = hash(key);
         final int index = hashIndex(hashCode, data.length);
-        HashEntry<K, V> entry = data[index];
-        HashEntry<K, V> previous = null;
+        final HashEntry<K, V> entry = data[index];
+        final HashEntry<K, V> previous = null;
+        return removeRest(entry, hashCode, key, index, previous);
+    }
+
+    private V removeRest(HashEntry<K, V> entry, final int hashCode, Object key, final int index,
+            HashEntry<K, V> previous) {
         while (entry != null) {
             if (entry.hashCode == hashCode && isEqualKey(key, entry.key)) {
                 final V oldValue = entry.getValue();
@@ -1461,7 +1479,11 @@ public class AbstractHashedMap<K, V> extends AbstractMap<K, V> implements Iterab
         buf.append('{');
 
         final MapIterator<K, V> it = mapIterator();
-        boolean hasNext = it.hasNext();
+        final boolean hasNext = it.hasNext();
+        return toStringRest(hasNext, it, buf);
+    }
+
+    private String toStringRest(boolean hasNext, final MapIterator<K, V> it, final StringBuilder buf) {
         while (hasNext) {
             final K key = it.next();
             final V value = it.getValue();
@@ -1474,7 +1496,10 @@ public class AbstractHashedMap<K, V> extends AbstractMap<K, V> implements Iterab
                 buf.append(CollectionUtils.COMMA).append(' ');
             }
         }
+        return toStringRest2(buf);
+    }
 
+    private static String toStringRest2(final StringBuilder buf) {
         buf.append('}');
         return buf.toString();
     }

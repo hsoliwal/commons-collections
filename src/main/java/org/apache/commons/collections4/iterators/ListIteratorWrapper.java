@@ -160,6 +160,10 @@ public class ListIteratorWrapper<E> implements ResettableListIterator<E> {
         final E retval = iterator.next();
         cache(retval);
         ++currentIndex;
+        return nextRest(retval);
+    }
+
+    private E nextRest(final E retval) throws NoSuchElementException {
         ++wrappedIteratorIndex;
         removeState = true;
         return retval;
@@ -234,6 +238,10 @@ public class ListIteratorWrapper<E> implements ResettableListIterator<E> {
             throw new IllegalStateException(MessageFormat.format(CANNOT_REMOVE_MESSAGE, Integer.valueOf(removeIndex)));
         }
         iterator.remove();
+        removeRest(removeIndex);
+    }
+
+    private void removeRest(int removeIndex) throws IllegalStateException {
         removeCached(removeIndex);
         currentIndex = removeIndex;
         wrappedIteratorIndex--;

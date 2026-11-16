@@ -130,7 +130,10 @@ public class CircularFifoQueue<E> extends AbstractCollection<E>
     @Override
     public boolean add(final E element) {
         Objects.requireNonNull(element, "element");
+        return addRest(element);
+    }
 
+    private boolean addRest(final E element) {
         // An exact CircularFifoQueue owns its ring without subclass hooks.
         // In the full state, start == end. Replacing that one slot and
         // advancing both cursors preserves the original physical layout,
@@ -143,7 +146,10 @@ public class CircularFifoQueue<E> extends AbstractCollection<E>
             end = next;
             return true;
         }
+        return addRest2(element);
+    }
 
+    private boolean addRest2(final E element) {
         if (isAtFullCapacity()) {
             remove();
         }
@@ -153,7 +159,10 @@ public class CircularFifoQueue<E> extends AbstractCollection<E>
         if (end >= maxElements) {
             end = 0;
         }
+        return addRest3();
+    }
 
+    private boolean addRest3() {
         if (end == start) {
             full = true;
         }
@@ -185,7 +194,10 @@ public class CircularFifoQueue<E> extends AbstractCollection<E>
         if (count == 0) {
             return false;
         }
+        return addAllRest(count, input);
+    }
 
+    private boolean addAllRest(final int count, final ArrayList<? extends E> input) {
         // Preserve inherited addAll's partial mutation on the first null.
         // The exact ArrayList.get implementation has no overridable callbacks.
         for (int index = 0; index < count; index++) {
@@ -196,7 +208,10 @@ public class CircularFifoQueue<E> extends AbstractCollection<E>
                 throw new NullPointerException("element");
             }
         }
+        return addAllRest2(count, input);
+    }
 
+    private boolean addAllRest2(final int count, final ArrayList<? extends E> input) {
         // Recreate the *physical* ring positions of count serial add calls.
         // Only the final min(count, capacity) writes can remain observable.
         final int retained = Math.min(count, maxElements);
@@ -209,6 +224,10 @@ public class CircularFifoQueue<E> extends AbstractCollection<E>
             }
         }
         final int nextEnd = (int) (((long) end + count) % maxElements);
+        return addAllRest3(count, nextEnd);
+    }
+
+    private boolean addAllRest3(final int count, final int nextEnd) {
         final boolean saturated = count >= maxElements - size();
         if (saturated) {
             start = nextEnd;
@@ -361,8 +380,12 @@ public class CircularFifoQueue<E> extends AbstractCollection<E>
         if (getClass() != CircularFifoQueue.class) {
             return super.contains(candidate);
         }
-        int cursor = start;
-        boolean first = full;
+        final int cursor = start;
+        final boolean first = full;
+        return containsRest(first, cursor, candidate);
+    }
+
+    private boolean containsRest(boolean first, int cursor, final Object candidate) {
         while (first || cursor != end) {
             first = false;
             final E element = elements[cursor];
@@ -529,7 +552,10 @@ public class CircularFifoQueue<E> extends AbstractCollection<E>
                 }
 
                 shiftSuffixTowardRemovedSlot(lastReturnedIndex);
+                removeRest2();
+            }
 
+            private void removeRest2() {
                 lastReturnedIndex = -1;
                 end = decrement(end);
                 elements[end] = null;
@@ -600,6 +626,10 @@ public class CircularFifoQueue<E> extends AbstractCollection<E>
         for (int i = 0; i < size; i++) {
             elements[i] = (E) in.readObject();
         }
+        readObjectRest(size);
+    }
+
+    private void readObjectRest(final int size) throws IOException, ClassNotFoundException {
         start = 0;
         full = size == maxElements;
         if (full) {
@@ -654,6 +684,10 @@ public class CircularFifoQueue<E> extends AbstractCollection<E>
         }
 
         final E element = elements[start];
+        return removeRest(element);
+    }
+
+    private E removeRest(final E element) {
         if (element != null) {
             elements[start++] = null;
 

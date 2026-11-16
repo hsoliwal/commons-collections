@@ -498,6 +498,10 @@ public class ConcurrentReferenceHashMap<K, V> extends AbstractMap<K, V> implemen
                     return;
                 }
             }
+            advanceRest();
+        }
+
+        private void advanceRest() {
             while (nextSegmentIndex >= 0) {
                 final Segment<K, V> seg = segments[nextSegmentIndex--];
                 if (seg.count != 0) {
@@ -1673,13 +1677,21 @@ public class ConcurrentReferenceHashMap<K, V> extends AbstractMap<K, V> implemen
         // the only other methods also susceptible to ABA problems.
         //
         final int[] mc = new int[segments.length];
-        int mcsum = 0;
+        final int mcsum = 0;
+        return isEmptyRest(segments, mcsum, mc);
+    }
+
+    private boolean isEmptyRest(final Segment<K, V>[] segments, int mcsum, final int[] mc) {
         for (int i = 0; i < segments.length; ++i) {
             if (segments[i].count != 0) {
                 return false;
             }
             mcsum += mc[i] = segments[i].modCount;
         }
+        return isEmptyRest2(mcsum, segments, mc);
+    }
+
+    private boolean isEmptyRest2(int mcsum, final Segment<K, V>[] segments, final int[] mc) {
         // If mcsum happens to be zero, then we know we got a snapshot
         // before any modifications at all were made. This is
         // probably common enough to bother tracking.

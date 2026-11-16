@@ -69,13 +69,25 @@ public class SwitchTransformer<T, R> implements Transformer<T, R>, Serializable 
         final Map<Predicate<? super I>, Transformer<? super I, ? extends O>> entries = new LinkedHashMap<>(map);
         final Transformer<? super I, ? extends O> defaultTransformer = entries.remove(null);
         final int size = entries.size();
+        return switchTransformerRest(size, defaultTransformer, entries);
+    }
+
+    private static <I, O> Transformer<I, O> switchTransformerRest(final int size,
+            final Transformer<? super I, ? extends O> defaultTransformer,
+            final Map<Predicate<? super I>, Transformer<? super I, ? extends O>> entries) {
         if (size == 0) {
             return (Transformer<I, O>) (defaultTransformer == null ? ConstantTransformer.<I, O>nullTransformer() :
                                                                      defaultTransformer);
         }
         final Transformer<? super I, ? extends O>[] transformers = new Transformer[size];
         final Predicate<? super I>[] preds = new Predicate[size];
-        int i = 0;
+        final int i = 0;
+        return switchTransformerRest2(entries, preds, i, transformers, defaultTransformer);
+    }
+
+    private static <I, O> Transformer<I, O> switchTransformerRest2(final Map<Predicate<? super I>, Transformer<? super I, ? extends O>> entries,
+            final Predicate<? super I>[] preds, int i, final Transformer<? super I, ? extends O>[] transformers,
+            final Transformer<? super I, ? extends O> defaultTransformer) {
         for (final Map.Entry<Predicate<? super I>,
                              Transformer<? super I, ? extends O>> entry : entries.entrySet()) {
             preds[i] = entry.getKey();

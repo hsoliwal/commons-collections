@@ -67,7 +67,12 @@ public class SwitchClosure<T> implements Closure<T>, Serializable {
         }
         final Closure<E>[] closures = new Closure[size];
         final Predicate<E>[] preds = new Predicate[size];
-        int i = 0;
+        final int i = 0;
+        return switchClosureRest(entries, preds, i, closures, defaultClosure);
+    }
+
+    private static <E> Closure<E> switchClosureRest(final Map<Predicate<E>, Closure<E>> entries,
+            final Predicate<E>[] preds, int i, final Closure<E>[] closures, final Closure<? super E> defaultClosure) {
         for (final Map.Entry<Predicate<E>, Closure<E>> entry : entries.entrySet()) {
             preds[i] = entry.getKey();
             closures[i] = entry.getValue();

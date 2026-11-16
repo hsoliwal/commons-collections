@@ -465,6 +465,10 @@ public class CollectionUtils {
         if (includeDuplicates) {
             return IteratorUtils.toList(iterator, totalSize);
         }
+        return collateRest(totalSize, iterator);
+    }
+
+    private static <O> List<O> collateRest(final int totalSize, final Iterator<O> iterator) {
         final ArrayList<O> mergedList = new ArrayList<>(totalSize);
         O lastItem = null;
         boolean first = true;
@@ -1439,6 +1443,11 @@ public class CollectionUtils {
         }
         final Collection<E> result = new ArrayList<>(count);
         final Iterator<E> iterator = input.iterator();
+        return removeCountRest(count, startIndex, iterator, result);
+    }
+
+    private static <E> Collection<E> removeCountRest(int count, int startIndex, final Iterator<E> iterator,
+            final Collection<E> result) {
         while (count > 0) {
             if (startIndex > 0) {
                 startIndex -= 1;
@@ -1830,6 +1839,11 @@ public class CollectionUtils {
                 multiSet.add(element);
             }
         }
+        return subtractRest(a, multiSet, list);
+    }
+
+    private static <O> Collection<O> subtractRest(final Iterable<? extends O> a, final HashMultiSet<O> multiSet,
+            final ArrayList<O> list) {
         for (final O element : a) {
             if (multiSet.remove(element, 1) == 0) {
                 list.add(element);

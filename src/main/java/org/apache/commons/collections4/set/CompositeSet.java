@@ -508,7 +508,11 @@ public class CompositeSet<E> implements Set<E>, Serializable {
             result = (Object[]) Array.newInstance(array.getClass().getComponentType(), size);
         }
 
-        int offset = 0;
+        final int offset = 0;
+        return toArrayRest(result, offset, size);
+    }
+
+    private <T> T[] toArrayRest(Object[] result, int offset, final int size) {
         for (final Collection<E> item : all) {
             for (final E e : item) {
                 result[offset++] = e;

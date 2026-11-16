@@ -296,6 +296,10 @@ public final class Shape {
 
         final int numberOfHashFunctions = calculateNumberOfHashFunctions(numberOfItems, numberOfBits);
         final Shape shape = new Shape(numberOfHashFunctions, numberOfBits);
+        return fromNPRest(shape, numberOfItems);
+    }
+
+    private static Shape fromNPRest(final Shape shape, final int numberOfItems) {
         // check that probability is within range
         checkCalculatedProbability(shape.getProbability(numberOfItems));
         return shape;
@@ -329,7 +333,10 @@ public final class Shape {
         // Number of items (n):
         // n = ceil(m / (-k / ln(1 - exp(ln(p) / k))))
         final double n = Math.ceil(numberOfBits / (-numberOfHashFunctions / Math.log(-Math.expm1(Math.log(probability) / numberOfHashFunctions))));
+        return fromPMKRest(numberOfHashFunctions, numberOfBits, n);
+    }
 
+    private static Shape fromPMKRest(final int numberOfHashFunctions, final int numberOfBits, final double n) {
         // log of probability is always < 0
         // number of hash functions is >= 1
         // e^x where x < 0 = [0,1)
@@ -342,6 +349,10 @@ public final class Shape {
         // do not have to check for Integer.MAX_VALUE either.
 
         final Shape shape = new Shape(numberOfHashFunctions, numberOfBits);
+        return fromPMKRest2(shape, n);
+    }
+
+    private static Shape fromPMKRest2(final Shape shape, final double n) {
         // check that probability is within range
         checkCalculatedProbability(shape.getProbability((int) n));
         return shape;

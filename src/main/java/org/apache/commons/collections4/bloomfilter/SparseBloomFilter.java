@@ -91,6 +91,10 @@ public final class SparseBloomFilter implements BloomFilter<SparseBloomFilter> {
                 proposed = Math.min(maximum, Math.max(8L, proposed + (proposed >>> 1)));
             } while (proposed < required);
             final int capacity = (int) proposed;
+            reserveRest(capacity);
+        }
+
+        private void reserveRest(final int capacity) {
             final int[] newKeys = Arrays.copyOf(keys, capacity);
             final int[] newLeft = Arrays.copyOf(left, capacity);
             final int[] newRight = Arrays.copyOf(right, capacity);
@@ -113,6 +117,10 @@ public final class SparseBloomFilter implements BloomFilter<SparseBloomFilter> {
             right[slot] = NONE;
             next[slot] = successor;
             heights[slot] = 0;
+            return newLeafRest(previous, slot, successor);
+        }
+
+        private int newLeafRest(final int previous, final int slot, final int successor) {
             if (previous == NONE) {
                 first = slot;
             } else {
@@ -436,7 +444,11 @@ public final class SparseBloomFilter implements BloomFilter<SparseBloomFilter> {
         /** Stream allMatch checks modification after the callback, including false. */
         private boolean processIndices(final IntPredicate consumer) {
             final int expectedModCount = modCount;
-            int current = first;
+            final int current = first;
+            return processIndicesRest(current, consumer, expectedModCount);
+        }
+
+        private boolean processIndicesRest(int current, final IntPredicate consumer, final int expectedModCount) {
             while (current != NONE) {
                 final int key = keys[current];
                 current = next[current];
@@ -558,6 +570,10 @@ public final class SparseBloomFilter implements BloomFilter<SparseBloomFilter> {
                 return indices.containsAll(other);
             }
         }
+        return containsRest(indexExtractor);
+    }
+
+    private boolean containsRest(final IndexExtractor indexExtractor) {
         // Preserve arbitrary-producer callbacks, return values and exception behavior.
         return indexExtractor.processIndices(indices::contains);
     }
@@ -617,7 +633,10 @@ public final class SparseBloomFilter implements BloomFilter<SparseBloomFilter> {
         } else {
             indexExtractor.processIndices(this::add);
         }
+        return mergeRest();
+    }
 
+    private boolean mergeRest() {
         if (!indices.isEmpty()) {
             if (indices.keys[indices.last] >= shape.getNumberOfBits()) {
                 throw new IllegalArgumentException(String.format("Value in list %s is greater than maximum value (%s)",

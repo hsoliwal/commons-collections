@@ -227,7 +227,10 @@ public final class UnmodifiableEntrySet<K, V>
         for (int i = 0; i < result.length; i++) {
             result[i] = new UnmodifiableEntry((Map.Entry<K, V>) result[i]);
         }
+        return toArrayRest(result, array);
+    }
 
+    private static <T> T[] toArrayRest(Object[] result, final T[] array) {
         // check to see if result should be returned straight
         if (result.length > array.length) {
             return (T[]) result;

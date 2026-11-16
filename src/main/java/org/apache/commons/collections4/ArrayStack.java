@@ -148,7 +148,11 @@ public class ArrayStack<E> extends ArrayList<E> {
             final int index = super.lastIndexOf(object);
             return index < 0 ? -1 : size - index;
         }
-        int i = size - 1; // Current index
+        final int i = size - 1; // Current index
+        return searchRest(i, object);
+    }
+
+    private int searchRest(int i, final Object object) {
         int n = 1; // Current distance
         while (i >= 0) {
             final Object current = get(i);

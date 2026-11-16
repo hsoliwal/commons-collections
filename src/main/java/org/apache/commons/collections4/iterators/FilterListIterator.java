@@ -231,7 +231,10 @@ public class FilterListIterator<E> implements ListIterator<E> {
             }
             clearNextObject();
         }
+        return setNextObjectRest();
+    }
 
+    private boolean setNextObjectRest() {
         if (iterator == null) {
             return false;
         }
@@ -267,7 +270,10 @@ public class FilterListIterator<E> implements ListIterator<E> {
             }
             clearPreviousObject();
         }
+        return setPreviousObjectRest();
+    }
 
+    private boolean setPreviousObjectRest() {
         if (iterator == null) {
             return false;
         }

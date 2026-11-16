@@ -138,8 +138,12 @@ public class PermutationIterator<E> implements Iterator<List<E>> {
         }
 
         // find the largest mobile integer k
-        int indexOfLargestMobileInteger = -1;
-        int largestKey = -1;
+        final int indexOfLargestMobileInteger = -1;
+        final int largestKey = -1;
+        return nextRest(largestKey, indexOfLargestMobileInteger);
+    }
+
+    private List<E> nextRest(int largestKey, int indexOfLargestMobileInteger) {
         for (int i = 0; i < keys.length; i++) {
             if (direction[i] && i < keys.length - 1 && keys[i] > keys[i + 1] ||
                 !direction[i] && i > 0 && keys[i] > keys[i - 1]) {
@@ -149,6 +153,10 @@ public class PermutationIterator<E> implements Iterator<List<E>> {
                 }
             }
         }
+        return nextRest2(largestKey, indexOfLargestMobileInteger);
+    }
+
+    private List<E> nextRest2(int largestKey, int indexOfLargestMobileInteger) {
         if (largestKey == -1) {
             final List<E> toReturn = nextPermutation;
             nextPermutation = null;
@@ -161,6 +169,11 @@ public class PermutationIterator<E> implements Iterator<List<E>> {
         keys[indexOfLargestMobileInteger] = keys[indexOfLargestMobileInteger + offset];
         keys[indexOfLargestMobileInteger + offset] = tmpKey;
         final boolean tmpDirection = direction[indexOfLargestMobileInteger];
+        return nextRest3(indexOfLargestMobileInteger, offset, tmpDirection, largestKey);
+    }
+
+    private List<E> nextRest3(int indexOfLargestMobileInteger, final int offset, final boolean tmpDirection,
+            int largestKey) {
         direction[indexOfLargestMobileInteger] = direction[indexOfLargestMobileInteger + offset];
         direction[indexOfLargestMobileInteger + offset] = tmpDirection;
 
@@ -172,6 +185,10 @@ public class PermutationIterator<E> implements Iterator<List<E>> {
             }
             nextP.add(elementAtKey(keys[i]));
         }
+        return nextRest4(nextP);
+    }
+
+    private List<E> nextRest4(final List<E> nextP) {
         final List<E> result = nextPermutation;
         nextPermutation = nextP;
         return result;

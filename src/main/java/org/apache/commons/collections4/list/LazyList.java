@@ -166,6 +166,10 @@ public class LazyList<E> extends AbstractSerializableListDecorator<E> {
             // good and ready to go
             return object;
         }
+        return getRest(size, index);
+    }
+
+    private E getRest(final int size, final int index) {
         // we have to grow the list
         for (int i = size; i < index; i++) {
             decorated().add(null);
