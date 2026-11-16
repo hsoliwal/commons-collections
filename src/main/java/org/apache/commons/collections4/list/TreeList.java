@@ -26,6 +26,7 @@
 // Modified 2026 by Hitesh Soliwal and contributors: guarded bulk membership compaction.
 // Modified 2026 by Synexia contributors: reuse a temporary owner-state membership mask.
 // Modified 2026 by Hitesh Soliwal and contributors: linear indexed bulk insertion into reusable slots.
+// Modified 2026 by Synexia contributors: direct threaded reverse search and List hashing without iterator allocation.
 package org.apache.commons.collections4.list;
 
 import java.util.AbstractList;
@@ -1152,6 +1153,82 @@ public class TreeList<E> extends AbstractList<E> {
             return -1;
         }
         return slots.indexOf(root, object, slots.relativePosition[root]);
+    }
+
+    /**
+     * Hash the existing threaded AVL slots without creating a ListIterator.
+     * The exact owner retains the List hash contract and its fail-fast timing,
+     * while subclasses keep their inherited iterator/size overrides.
+     *
+     * @return the ordered List hash
+     */
+    @Override
+    public int hashCode() {
+        if (getClass() != TreeList.class) {
+            return super.hashCode();
+        }
+        final int expectedModCount = modCount;
+        int hash = 1;
+        int index = 0;
+        int cursor = root == -1 ? -1 : slots.min(root);
+        while (index < size) {
+            if (modCount != expectedModCount) {
+                throw new ConcurrentModificationException();
+            }
+            final Object value = slots.values[cursor];
+            hash = 31 * hash + (value == null ? 0 : value.hashCode());
+            index++;
+            // After the final element, inherited hasNext() returns false
+            // without checking modCount again, even after a user callback.
+            if (index >= size) {
+                break;
+            }
+            if (modCount != expectedModCount) {
+                throw new ConcurrentModificationException();
+            }
+            cursor = slots.next(cursor);
+        }
+        return hash;
+    }
+
+    /**
+     * Finds the final occurrence by walking the existing threaded AVL slots.
+     * Exact instances avoid allocating a ListIterator. Subclasses retain
+     * inherited iterator dispatch and its overrides.
+     *
+     * @param object The object to search for
+     * @return the final matching index, or -1
+     */
+    @Override
+    public int lastIndexOf(final Object object) {
+        if (getClass() != TreeList.class) {
+            return super.lastIndexOf(object);
+        }
+        final int expectedModCount = modCount;
+        int index = size;
+        int cursor = root == -1 ? -1 : slots.max(root);
+        while (cursor != -1) {
+            index--;
+            if (modCount != expectedModCount) {
+                throw new ConcurrentModificationException();
+            }
+            final Object value = slots.values[cursor];
+            // AbstractList.lastIndexOf invokes the *search* object's equals,
+            // unlike this class's historical indexOf implementation.
+            if (object == null ? value == null : object.equals(value)) {
+                return index;
+            }
+            // AbstractList.hasPrevious() ends without another fail-fast check
+            // after comparing the first element, even if equals modified the list.
+            if (index == 0) {
+                return -1;
+            }
+            if (modCount != expectedModCount) {
+                throw new ConcurrentModificationException();
+            }
+            cursor = slots.previous(cursor);
+        }
+        return -1;
     }
 
     /**
