@@ -16,6 +16,7 @@
  */
 // Modified 2026 by Hitesh Soliwal and Contributors to the Synexia Project:
 // preserve owner-indexed pending arrays with upstream nested-chain and cycle fixes.
+// Modified 2026 by Synexia contributors: per-operation indexed ancestor state and shallow-cycle guards.
 package org.apache.commons.collections4.iterators;
 
 import java.util.ArrayDeque;
@@ -78,6 +79,19 @@ public class IteratorChain<E> implements Iterator<E> {
         }
         // Subclasses may override any iterator method or updateCurrentIterator().
         return unwrapped.getClass() == IteratorChain.class ? (IteratorChain<? extends E>) unwrapped : null;
+    }
+
+    /** Promote to an identity hash table only after shallow linear checks stop paying. */
+    private static final int LOCAL_ANCESTORS = 4;
+
+    private static boolean seen(final IteratorChain<?>[] ancestors, final int depth,
+            final IteratorChain<?> candidate) {
+        for (int i = 0; i < depth; i++) {
+            if (ancestors[i] == candidate) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Shared empty storage; no deque or payload array is allocated by an empty chain. */
@@ -356,12 +370,65 @@ public class IteratorChain<E> implements Iterator<E> {
         if (lastUsedIterator == null) {
             throw new IllegalStateException("remove() has been invoked without next()");
         }
-        // Flat removal needs no traversal state, and must still delegate to subclasses and decorators.
+        // Preserve virtual subclass/decorator dispatch without inspecting it.
         if (lastUsedIterator.getClass() != IteratorChain.class) {
             lastUsedIterator.remove();
             lastUsedIterator = null;
             return;
         }
+
+        // The usual one-, two- and three-child chains can retain all owner
+        // identities in local variables. A failed remove leaves every record
+        // untouched, and callback reentrancy cannot replace the saved owners.
+        final IteratorChain<?> first = (IteratorChain<?>) lastUsedIterator;
+        if (first == this) {
+            throw new IllegalStateException("Cyclic IteratorChain");
+        }
+        first.lockChain();
+        if (first.lastUsedIterator == null) {
+            throw new IllegalStateException("remove() has been invoked without next()");
+        }
+        if (first.lastUsedIterator.getClass() != IteratorChain.class) {
+            first.lastUsedIterator.remove();
+            first.lastUsedIterator = null;
+            lastUsedIterator = null;
+            return;
+        }
+        final IteratorChain<?> second = (IteratorChain<?>) first.lastUsedIterator;
+        if (second == this || second == first) {
+            throw new IllegalStateException("Cyclic IteratorChain");
+        }
+        second.lockChain();
+        if (second.lastUsedIterator == null) {
+            throw new IllegalStateException("remove() has been invoked without next()");
+        }
+        if (second.lastUsedIterator.getClass() != IteratorChain.class) {
+            second.lastUsedIterator.remove();
+            second.lastUsedIterator = null;
+            first.lastUsedIterator = null;
+            lastUsedIterator = null;
+            return;
+        }
+        final IteratorChain<?> third = (IteratorChain<?>) second.lastUsedIterator;
+        if (third == this || third == first || third == second) {
+            throw new IllegalStateException("Cyclic IteratorChain");
+        }
+        third.lockChain();
+        if (third.lastUsedIterator == null) {
+            throw new IllegalStateException("remove() has been invoked without next()");
+        }
+        if (third.lastUsedIterator.getClass() != IteratorChain.class) {
+            third.lastUsedIterator.remove();
+            third.lastUsedIterator = null;
+            second.lastUsedIterator = null;
+            first.lastUsedIterator = null;
+            lastUsedIterator = null;
+            return;
+        }
+
+        // For arbitrarily deep chains preserve the incumbent identity-map
+        // traversal. This wins over repeated small-array identity scans and
+        // retains the original recorded-owner cleanup after user callbacks.
         final Deque<IteratorChain<?>> chains = new ArrayDeque<>();
         final Set<IteratorChain<?>> active = Collections.newSetFromMap(new IdentityHashMap<>());
         IteratorChain<?> chain = this;
@@ -375,14 +442,12 @@ public class IteratorChain<E> implements Iterator<E> {
             }
             chains.push(chain);
             final Iterator<?> iterator = chain.lastUsedIterator;
-            // Do not unwrap unmodifiable decorators or bypass a subclass's remove() method.
             if (iterator.getClass() != IteratorChain.class) {
                 iterator.remove();
                 break;
             }
             chain = (IteratorChain<?>) iterator;
         }
-        // Only clear removal state after the underlying remove() succeeds.
         for (final IteratorChain<?> usedChain : chains) {
             usedChain.lastUsedIterator = null;
         }
@@ -406,9 +471,11 @@ public class IteratorChain<E> implements Iterator<E> {
      *
      * @throws IllegalStateException if a cycle is detected in the nested chains
      */
+    @SuppressWarnings("unchecked")
     protected void updateCurrentIterator() {
-        Deque<IteratorChain<? extends E>> parents = null;
-        Set<IteratorChain<? extends E>> active = null;
+        IteratorChain<?>[] parents = null;
+        int depth = 0;
+        IdentityHashMap<IteratorChain<?>, Boolean> active = null;
         IteratorChain<? extends E> chain = this;
         while (true) {
             chain.initializeCurrentIterator();
@@ -417,25 +484,31 @@ public class IteratorChain<E> implements Iterator<E> {
                 chain.cachedHasNextValue = chain.currentIterator.hasNext();
             } else {
                 child.lockChain();
-                // A cached result must not conceal a link back to an active ancestor.
-                if (child == chain || active != null && active.contains(child)) {
-                    // Discard intermediate results so a retry also detects the cycle.
+                // Cycles are forbidden even when a child cached hasNext().
+                if (child == chain || (active != null
+                        ? active.containsKey(child) : parents != null && seen(parents, depth, child))) {
                     chain.cachedHasNextValue = null;
-                    if (parents != null) {
-                        for (final IteratorChain<?> parent : parents) {
-                            parent.cachedHasNextValue = null;
-                        }
+                    for (int i = 0; i < depth; i++) {
+                        parents[i].cachedHasNextValue = null;
                     }
                     throw new IllegalStateException("Cyclic IteratorChain");
                 }
                 if (child.cachedHasNextValue == null) {
                     if (parents == null) {
-                        parents = new ArrayDeque<>();
-                        active = Collections.newSetFromMap(new IdentityHashMap<>());
-                        active.add(chain);
+                        parents = new IteratorChain<?>[8];
+                    } else if (depth == parents.length) {
+                        parents = Arrays.copyOf(parents, parents.length << 1);
                     }
-                    active.add(child);
-                    parents.push(chain);
+                    if (depth == LOCAL_ANCESTORS && active == null) {
+                        active = new IdentityHashMap<>();
+                        for (int i = 0; i < depth; i++) {
+                            active.put(parents[i], Boolean.TRUE);
+                        }
+                    }
+                    parents[depth++] = chain;
+                    if (active != null) {
+                        active.put(chain, Boolean.TRUE);
+                    }
                     chain = child;
                     continue;
                 }
@@ -445,11 +518,14 @@ public class IteratorChain<E> implements Iterator<E> {
                 chain.pollCurrentIterator();
                 continue;
             }
-            if (parents == null || parents.isEmpty()) {
+            if (depth == 0) {
                 return;
             }
-            active.remove(chain);
-            chain = parents.pop();
+            if (active != null) {
+                active.remove(chain);
+            }
+            chain = (IteratorChain<? extends E>) parents[--depth];
+            parents[depth] = null;
         }
     }
 }
