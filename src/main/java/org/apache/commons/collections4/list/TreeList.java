@@ -24,6 +24,7 @@
 // Modified 2026 by Hitesh Soliwal and contributors: allocation-free reversed-spine AVL joins.
 // Modified 2026 by Hitesh Soliwal and contributors: array-backed linear bulk range removal.
 // Modified 2026 by Hitesh Soliwal and contributors: guarded bulk membership compaction.
+// Modified 2026 by Synexia contributors: reuse a temporary owner-state membership mask.
 // Modified 2026 by Hitesh Soliwal and contributors: linear indexed bulk insertion into reusable slots.
 package org.apache.commons.collections4.list;
 
@@ -89,6 +90,8 @@ public class TreeList<E> extends AbstractList<E> {
         private static final int LEFT_PREVIOUS = 1;
         private static final int RIGHT_NEXT = 2;
         private static final int LIVE = 4;
+        /** Temporary per-slot decision bit; cleared before any public callback. */
+        private static final int MARK_REMOVED = 8;
         private static final Object[] EMPTY_VALUES = new Object[0];
         private static final int[] EMPTY_INTS = new int[0];
         private static final byte[] EMPTY_BYTES = new byte[0];
@@ -658,15 +661,21 @@ public class TreeList<E> extends AbstractList<E> {
             return (int) (rebuildRange(first, remainingSize) >>> 32);
         }
 
-        /** Compact a callback-free membership selection through the existing slot lanes. */
-        private int removeMembership(final int root, final Collection<?> membership,
-                final boolean retain, final int remainingSize) {
+        /** Clear transient membership decisions before inherited dispatch or failure. */
+        private void clearMembershipMarks(final int root) {
+            for (int current = min(root); current != NONE; current = next(current)) {
+                state[current] &= ~MARK_REMOVED;
+            }
+        }
+
+        /** Consume the decisions already made during the callback-free preflight. */
+        private int removeMarkedMembership(final int root, final int remainingSize) {
             int first = NONE;
             int last = NONE;
             int current = min(root);
             while (current != NONE) {
                 final int successor = next(current);
-                if (membership.contains(values[current]) != retain) {
+                if ((state[current] & MARK_REMOVED) != 0) {
                     releaseSlot(current);
                 } else {
                     left[current] = last;
@@ -1222,26 +1231,39 @@ public class TreeList<E> extends AbstractList<E> {
             return -1;
         }
         int removed = 0;
-        for (int slot = slots.min(root); slot != -1; slot = slots.next(slot)) {
-            final Object value = slots.values[slot];
-            if (value != null && value.getClass() != Integer.class
-                    && value.getClass() != Long.class && value.getClass() != String.class) {
+        boolean committed = false;
+        try {
+            for (int slot = slots.min(root); slot != -1; slot = slots.next(slot)) {
+                final Object value = slots.values[slot];
+                if (value != null && value.getClass() != Integer.class
+                        && value.getClass() != Long.class && value.getClass() != String.class) {
+                    return -1;
+                }
+                // Exact HashSet and final immutable value classes cannot dispatch
+                // user equality callbacks. Store the decision in a spare state bit
+                // rather than repeating the hash lookup during compaction.
+                if (membership.contains(value) != retain) {
+                    slots.state[slot] |= SlotStore.MARK_REMOVED;
+                    removed++;
+                }
+            }
+            if (removed == 0) {
+                return 0;
+            }
+            if (removed < size - (size >>> 1)) {
                 return -1;
             }
-            if (membership.contains(value) != retain) {
-                removed++;
+            // From this point no external callback or allocation is performed.
+            committed = true;
+            root = slots.removeMarkedMembership(root, size - removed);
+            size -= removed;
+            modCount += removed;
+            return removed;
+        } finally {
+            if (!committed && removed != 0) {
+                slots.clearMembershipMarks(root);
             }
         }
-        if (removed == 0) {
-            return 0;
-        }
-        if (removed < size - (size >>> 1)) {
-            return -1;
-        }
-        root = slots.removeMembership(root, membership, retain, size - removed);
-        size -= removed;
-        modCount += removed;
-        return removed;
     }
 
     /** {@inheritDoc} */
