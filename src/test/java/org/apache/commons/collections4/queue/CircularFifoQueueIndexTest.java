@@ -13,7 +13,7 @@ import java.util.Random;
 import org.junit.jupiter.api.Test;
 
 /** Independent FIFO oracle for the two-span index mapping. */
-class M3CircularFifoQueueIndexTest {
+class CircularFifoQueueIndexTest {
     @Test
     void getMatchesDequeThroughWrapOverwriteAndReuse() {
         for (int capacity : new int[] {1, 2, 3, 7, 16, 33}) {

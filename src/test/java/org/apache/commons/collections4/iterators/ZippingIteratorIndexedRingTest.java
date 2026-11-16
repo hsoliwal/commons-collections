@@ -34,7 +34,7 @@ import org.apache.commons.collections4.FluentIterable;
 import org.junit.jupiter.api.Test;
 
 /** Behavior comparison with the original list-backed looping implementation. */
-class M3ZippingIteratorIndexedRingTest {
+class ZippingIteratorIndexedRingTest {
 
     @Test
     void interleavesWithExhaustedAndEmptyChildren() {

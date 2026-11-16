@@ -47,18 +47,17 @@ import java.util.NoSuchElementException;
 import java.util.Queue;
 import java.util.TreeSet;
 
+import org.apache.commons.collections4.ArrayStorageOracle;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import org.apache.commons.collections4.M3ArrayStorageOracle;
-
 /** Exhaustive original-source checks for contiguous spans, cursor state and retained storage. */
 class CircularFifoQueueArrayStorageTest {
     @TempDir
     static Path work;
-    private static M3ArrayStorageOracle oracle;
+    private static ArrayStorageOracle oracle;
     private static Field originalElements;
     private static Field currentElements;
     private static Field originalStart;
@@ -70,7 +69,7 @@ class CircularFifoQueueArrayStorageTest {
 
     @BeforeAll
     static void originalSource() throws Exception {
-        oracle = new M3ArrayStorageOracle(work);
+        oracle = new ArrayStorageOracle(work);
         final Class<?> original = oracle.originalClass("queue.CircularFifoQueue");
         assertNotSame(CircularFifoQueue.class, original);
         originalElements = field(original, "elements");

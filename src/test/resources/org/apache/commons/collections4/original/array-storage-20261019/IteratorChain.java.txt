@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.m3.collections.apache.iterators;
+package org.apache.commons.collections4.iterators;
 
 import java.util.Collection;
 import java.util.Iterator;

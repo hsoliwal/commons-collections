@@ -30,23 +30,22 @@ import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.apache.commons.collections4.ArrayStorageOracle;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import org.apache.commons.collections4.M3ArrayStorageOracle;
-
 /** Exact original-source callback traces qualify the owned value lane and presence mask. */
-class M3CollatingIteratorArrayStorageTest {
+class CollatingIteratorArrayStorageTest {
     @TempDir
     static Path work;
 
-    private static M3ArrayStorageOracle oracle;
+    private static ArrayStorageOracle oracle;
 
     @BeforeAll
     static void compileOriginal() throws Exception {
-        oracle = new M3ArrayStorageOracle(work);
+        oracle = new ArrayStorageOracle(work);
     }
 
     @AfterAll
@@ -63,7 +62,7 @@ class M3CollatingIteratorArrayStorageTest {
     }
 
     private static Object call(final Object target, final String method, final Class<?> type, final Object value) throws Exception {
-        return M3ArrayStorageOracle.invoke(target, method, new Class<?>[] {type}, value);
+        return ArrayStorageOracle.invoke(target, method, new Class<?>[] {type}, value);
     }
 
     private static Iterator<Integer> tracing(final int id, final List<Integer> values, final List<String> trace,
@@ -170,7 +169,7 @@ class M3CollatingIteratorArrayStorageTest {
                     break;
                 }
                 result.add("value:" + merged.next());
-                result.add("source:" + M3ArrayStorageOracle.invoke(merged, "getIteratorIndex", new Class<?>[0]));
+                result.add("source:" + ArrayStorageOracle.invoke(merged, "getIteratorIndex", new Class<?>[0]));
                 if (++ordinal % 4 == 0) {
                     merged.remove();
                 }

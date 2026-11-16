@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 /** First-party one-pass captured-input regression for dynamic-array bulk admission. */
-final class M3PredicatedBulkCaptureTest {
+final class PredicatedBulkCaptureTest {
     @Test void exactlyTheValidatedOccurrencesAreWritten() {
         List<String> owner = new ArrayList<>();
         Collection<String> view = PredicatedCollection.predicatedCollection(owner, value -> value.startsWith("ok"));

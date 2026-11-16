@@ -38,7 +38,7 @@ import java.util.NoSuchElementException;
 import org.junit.jupiter.api.Test;
 
 /** Contracts for projecting the flat owner's slots without materializing entries. */
-class M3Flat3MapProjectionTest {
+class Flat3MapProjectionTest {
 
     @Test
     void keysAndValuesDoNotRetainPerElementEntries() throws Exception {

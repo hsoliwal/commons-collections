@@ -14,7 +14,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /** Provider contract oracle for stream adapters around predicated Commons decorators. */
-final class M3StreamProviderContractTest {
+final class StreamProviderContractTest {
     @Test
     void predicatedViewKeepsValidationAtMutationAndPreservesEncounterOccurrences() {
         List<String> owner = new ArrayList<>();

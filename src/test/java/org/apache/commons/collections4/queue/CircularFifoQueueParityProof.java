@@ -11,10 +11,10 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Random;
 
-/** Fork-only differential: original Apache API versus package-only M3 relocation. */
-public final class M3ApacheCircularFifoRelocationProof {
+/** Fork-only differential: the queue through its fully qualified name versus its imported name. */
+public final class CircularFifoQueueParityProof {
     private static long checks;
-    private M3ApacheCircularFifoRelocationProof() { }
+    private CircularFifoQueueParityProof() { }
 
     private static void same(Object expected, Object actual, String label) {
         checks++;
@@ -140,6 +140,6 @@ public final class M3ApacheCircularFifoRelocationProof {
         }
         negativeCases();
         randomized();
-        System.out.println("PASS M3_APACHE_PACKAGE_RELOCATION checks=" + checks);
+        System.out.println("PASS CIRCULAR_FIFO_QUEUE_PARITY checks=" + checks);
     }
 }

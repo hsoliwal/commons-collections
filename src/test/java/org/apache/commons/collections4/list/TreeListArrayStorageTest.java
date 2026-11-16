@@ -15,22 +15,22 @@ import java.util.ArrayList;
 
 import org.junit.jupiter.api.Test;
 
-class M3TreeListArrayStorageTest {
+class TreeListArrayStorageTest {
     @Test
     void randomizedListAndIteratorContractsWithSlotReuse() throws ReflectiveOperationException {
         for (int seed = 0; seed < 4; seed++) {
-            M3TreeListArrayStorageProof.exercise(new ArrayList<>(), new TreeList<>(), 87121L + seed, 3000, false);
+            TreeListArrayStorageProof.exercise(new ArrayList<>(), new TreeList<>(), 87121L + seed, 3000, false);
         }
     }
 
     @Test
     void bulkAppendAndFailureReuseStorageAtBoundedLiveSize() throws ReflectiveOperationException {
-        M3TreeListArrayStorageProof.boundedBulkReuse(new TreeList<>(), new TreeList<>());
+        TreeListArrayStorageProof.boundedBulkReuse(new TreeList<>(), new TreeList<>());
     }
 
     @Test
     void failedBalancedBuildReleasesUncommittedPayloadAndCanGrowAgain() throws ReflectiveOperationException {
         // TreeList intentionally builds the complete source before attaching its subtree.
-        M3TreeListArrayStorageProof.failedBulkBuild(new TreeList<>(), new TreeList<>());
+        TreeListArrayStorageProof.failedBulkBuild(new TreeList<>(), new TreeList<>());
     }
 }

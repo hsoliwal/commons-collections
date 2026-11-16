@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.m3.collections.apache.bloomfilter;
+package org.apache.commons.collections4.bloomfilter;
 
 import java.util.Objects;
 import java.util.TreeSet;

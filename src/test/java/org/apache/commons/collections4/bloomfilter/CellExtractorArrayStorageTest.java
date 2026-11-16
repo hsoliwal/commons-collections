@@ -36,25 +36,24 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.IntPredicate;
 
+import org.apache.commons.collections4.ArrayStorageOracle;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import org.apache.commons.collections4.M3ArrayStorageOracle;
-
 /** The immutable original class and a separate frequency oracle qualify the new lanes. */
-class M3CellExtractorArrayStorageTest {
+class CellExtractorArrayStorageTest {
     @TempDir
     static Path work;
 
-    private static M3ArrayStorageOracle oracle;
+    private static ArrayStorageOracle oracle;
     private static Class<?> originalType;
     private static Class<?> originalPredicate;
 
     @BeforeAll
     static void compileOriginal() throws Exception {
-        oracle = new M3ArrayStorageOracle(work);
+        oracle = new ArrayStorageOracle(work);
         originalType = oracle.originalClass("bloomfilter.CellExtractor");
         originalPredicate = oracle.originalClass("bloomfilter.CellExtractor$CellPredicate");
     }

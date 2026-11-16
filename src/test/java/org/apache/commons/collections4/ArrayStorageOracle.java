@@ -38,20 +38,20 @@ import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
 
 /** Independently compiles the immutable preimages used by this bounded receiver proof. */
-public final class M3ArrayStorageOracle implements AutoCloseable {
+public final class ArrayStorageOracle implements AutoCloseable {
     private static final String PREFIX = "org.apache.commons.collections4.";
     private static final Map<String, String> SOURCE_HASHES = Map.of(
-            "bloomfilter.CellExtractor", "827c7e47975eaa90d82cca2ed86989b6dc00578605aa425150d2b1b4b7978948",
-            "iterators.CollatingIterator", "5fcade13ed5a1d75915528fc71f19ae8aaca177f548b44711b145d2baff509ea",
-            "iterators.IteratorChain", "f96aa53b71ef74098658fd8ea1de9afc28394c95283d2d1c2f0924086599782d",
-            "iterators.UnmodifiableIterator", "d823ac0aa7d3ab645c4b0fdba5cae4349448216a11a672cbcaff9299a31589a4",
-            "queue.CircularFifoQueue", "a93526672443ce20662aa44b528e90d1b739e30ed9b33078e1ff3473f64f1e97",
-            "iterators.PermutationIterator", "0c91046426a9bcee2555c9d3586d50597178158a7a8a5da795d01b615798e079");
+            "bloomfilter.CellExtractor", "f52a40c9586b13bf0c18d176e94e9c76ffea1a7024e0552ba9ac38dc058f405d",
+            "iterators.CollatingIterator", "e7f2f8e73e359919631d5f20e60ccd1ba4cc6b2c38f3e2882cea2cc20df882e7",
+            "iterators.IteratorChain", "7a87da0b110e1e657d670203c542fa3a00413b03161cc85c5de7e1eda5433a58",
+            "iterators.UnmodifiableIterator", "9a00fa5aabf154b4bfe18d5e179e269ad6361623f4e8529473d854cc0818aab8",
+            "queue.CircularFifoQueue", "d455d399425c40e2c98c8dab0f6d6b2de58b0df3225cecd1f212f13d5173da1e",
+            "iterators.PermutationIterator", "92c273d6b5b85e4bd51aabe559e6b4e0b0a01ec53977f18f0ad10419943c81c7");
 
     private final URLClassLoader loader;
 
     /** Creates original classes from exact UTF-8 preimages; the live owner is never an oracle. */
-    public M3ArrayStorageOracle(final Path work) throws Exception {
+    public ArrayStorageOracle(final Path work) throws Exception {
         final JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
         if (compiler == null) {
             throw new IllegalStateException("A JDK is required for the original-source proof");
@@ -60,8 +60,8 @@ public final class M3ArrayStorageOracle implements AutoCloseable {
         for (final Map.Entry<String, String> entry : SOURCE_HASHES.entrySet()) {
             final String leaf = entry.getKey().substring(entry.getKey().lastIndexOf('.') + 1) + ".java";
             final byte[] bytes;
-            try (InputStream input = M3ArrayStorageOracle.class.getResourceAsStream(
-                    "/m3/array-storage-20261019/original/" + leaf + ".txt")) {
+            try (InputStream input = ArrayStorageOracle.class.getResourceAsStream(
+                    "/org/apache/commons/collections4/original/array-storage-20261019/" + leaf + ".txt")) {
                 if (input == null) {
                     throw new IllegalStateException("Missing immutable original " + leaf);
                 }
@@ -88,7 +88,7 @@ public final class M3ArrayStorageOracle implements AutoCloseable {
                 throw new IllegalStateException("Original source compilation failed: " + diagnostics.getDiagnostics());
             }
         }
-        loader = new URLClassLoader(new URL[] {classes.toUri().toURL()}, M3ArrayStorageOracle.class.getClassLoader()) {
+        loader = new URLClassLoader(new URL[] {classes.toUri().toURL()}, ArrayStorageOracle.class.getClassLoader()) {
             @Override
             protected Class<?> loadClass(final String name, final boolean resolve) throws ClassNotFoundException {
                 synchronized (getClassLoadingLock(name)) {

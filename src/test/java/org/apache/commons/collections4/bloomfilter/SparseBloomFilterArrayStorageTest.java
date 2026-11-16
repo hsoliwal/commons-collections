@@ -52,11 +52,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /** Original-source callback and representation contracts for the private primitive owner. */
-class M3SparseBloomFilterArrayStorageTest {
+class SparseBloomFilterArrayStorageTest {
     private static final String OWNER = "org.apache.commons.collections4.bloomfilter.SparseBloomFilter";
     private static final Map<String, String> ORIGINALS = Map.of(
-            "SparseBloomFilter", "701a3785df9c0ba1dc6a8ff9e39f10a10727ab4ca3b52366b9f184aa2e812fc7",
-            "BitMaps", "3fb3ffee8d8bb198d7a34a38c0deed0297a8fcd5216475c45416148fb75fa614");
+            "SparseBloomFilter", "2d6e37f68cbe5a4b4d1577b46e0437b44e00d470410d0232dfc72afbb52ec682",
+            "BitMaps", "e65707697540bbc344aec8129fdca4ee41dc665d244d84d0293ba799c003d8e8");
     private static URLClassLoader originalLoader;
     private static Class<?> originalClass;
     private static long observations;
@@ -75,8 +75,8 @@ class M3SparseBloomFilterArrayStorageTest {
         final List<Path> sources = new ArrayList<>();
         for (final Map.Entry<String, String> entry : ORIGINALS.entrySet()) {
             final byte[] bytes;
-            try (InputStream input = M3SparseBloomFilterArrayStorageTest.class.getResourceAsStream(
-                    "/m3/sparse-bloom-arrays-20261019/original/" + entry.getKey() + ".java.txt")) {
+            try (InputStream input = SparseBloomFilterArrayStorageTest.class.getResourceAsStream(
+                    "/org/apache/commons/collections4/original/sparse-bloom-arrays-20261019/" + entry.getKey() + ".java.txt")) {
                 if (input == null) {
                     throw new IllegalStateException("Missing sealed original " + entry.getKey());
                 }
@@ -99,7 +99,7 @@ class M3SparseBloomFilterArrayStorageTest {
             assertTrue(compiler.getTask(null, files, null, options, null,
                     files.getJavaFileObjectsFromPaths(sources)).call());
         }
-        originalLoader = new URLClassLoader(new URL[] {classes.toUri().toURL()}, M3SparseBloomFilterArrayStorageTest.class.getClassLoader()) {
+        originalLoader = new URLClassLoader(new URL[] {classes.toUri().toURL()}, SparseBloomFilterArrayStorageTest.class.getClassLoader()) {
             @Override
             protected Class<?> loadClass(final String name, final boolean resolve) throws ClassNotFoundException {
                 synchronized (getClassLoadingLock(name)) {
@@ -324,7 +324,7 @@ class M3SparseBloomFilterArrayStorageTest {
                     for (int trigger = 1; trigger <= 5; trigger++) {
                         for (final boolean accepted : new boolean[] {false, true}) {
                             observations++;
-                            assertEquals(callbackTrace(M3SparseBloomFilterArrayStorageTest::original, bitmap, initial, mode, trigger, accepted),
+                            assertEquals(callbackTrace(SparseBloomFilterArrayStorageTest::original, bitmap, initial, mode, trigger, accepted),
                                     callbackTrace(SparseBloomFilter::new, bitmap, initial, mode, trigger, accepted),
                                     "bitmap=" + bitmap + " initial=" + Arrays.toString(initial) + " mode=" + mode
                                             + " trigger=" + trigger + " accepted=" + accepted);
@@ -433,7 +433,7 @@ class M3SparseBloomFilterArrayStorageTest {
         originalWork = Path.of(args[0]);
         compileOriginal();
         try {
-            final M3SparseBloomFilterArrayStorageTest tests = new M3SparseBloomFilterArrayStorageTest();
+            final SparseBloomFilterArrayStorageTest tests = new SparseBloomFilterArrayStorageTest();
             tests.ordinaryMergeContainsAndIndependentCopiesMatchOriginal();
             tests.delayedValidationAndExtractorProtocolRetainOriginalPartialState();
             tests.streamAndIteratorCallbackEpochBoundariesMatchOriginal();
