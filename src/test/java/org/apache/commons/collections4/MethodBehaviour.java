@@ -52,6 +52,9 @@ final class MethodBehaviour {
     /** Start of the text for a method this class cannot call. */
     static final String UNSUPPORTED = "UNSUPPORTED ";
 
+    /** The package of this library, as the engine itself is declared in it. */
+    private static final String ROOT = MethodBehaviour.class.getPackage().getName();
+
     /** Longest printed value kept verbatim; longer ones keep this prefix, their length and their hash code. */
     private static final int MAX_TEXT = 240;
 
@@ -93,7 +96,7 @@ final class MethodBehaviour {
     }
 
     private static String outcome(final Class<?> type, final Method method, final int index) {
-        final Random random = new Random(31L * (type.getName() + '#' + method.getName() + '(' + names(method) + ')').hashCode() + index);
+        final Random random = new Random(31L * relative(type.getName() + '#' + method.getName() + '(' + names(method) + ')').hashCode() + index);
         final Object[] arguments = arguments(method.getParameterTypes(), random);
         if (arguments == null) {
             return UNSUPPORTED + "parameter " + unsupported(method.getParameterTypes());
@@ -103,7 +106,15 @@ final class MethodBehaviour {
         if (!isStatic && receiver == null) {
             return UNSUPPORTED + "no instance";
         }
-        return call(method, receiver, arguments) + " ARGS " + print(arguments) + (isStatic ? "" : " THIS " + print(receiver));
+        return relative(call(method, receiver, arguments) + " ARGS " + print(arguments) + (isStatic ? "" : " THIS " + print(receiver)));
+    }
+
+    /**
+     * The text with this library's package name written as {@code ~}. Seeds and recorded outcomes are derived from
+     * such text only, so the recorded table stays valid when the library is carried under another package name.
+     */
+    static String relative(final String text) {
+        return text.replace(ROOT, "~");
     }
 
     /** One value per parameter type, or null when a type is not supported. */
@@ -175,7 +186,7 @@ final class MethodBehaviour {
 
     /** One line without identity hash codes, cut to a bounded length. */
     private static String clip(final String text) {
-        final String line = text.replaceAll("@[0-9a-f]{1,8}\\b", "@").replace("\\", "\\\\").replace("\n", "\\n")
+        final String line = relative(text).replaceAll("@[0-9a-f]{1,8}\\b", "@").replace("\\", "\\\\").replace("\n", "\\n")
                 .replace("\r", "\\r").replace("\t", "\\t");
         return line.length() <= MAX_TEXT ? line : line.substring(0, MAX_TEXT) + "...#" + line.length() + ':' + line.hashCode();
     }
