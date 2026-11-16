@@ -98,6 +98,49 @@ public final class SparseDensePeerContract {
         }
     }
 
+    /** Validate the actual array-backed AVL, not only its successor snapshot. */
+    private static int verifyNode(final int slot, final long lower, final long upper,
+            final int[] keys, final int[] left, final int[] right,
+            final byte[] heights, final boolean[] visited) {
+        if (slot == -1) {
+            return -1;
+        }
+        check(slot >= 0 && slot < visited.length && !visited[slot], "AVL slot ownership");
+        visited[slot] = true;
+        check(keys[slot] > lower && keys[slot] < upper, "AVL key ordering");
+        final int a = verifyNode(left[slot], lower, keys[slot], keys, left, right, heights, visited);
+        final int b = verifyNode(right[slot], keys[slot], upper, keys, left, right, heights, visited);
+        check(Math.abs(a - b) <= 1 && heights[slot] == Math.max(a, b) + 1, "AVL height/balance");
+        return heights[slot];
+    }
+
+    private static void verifyTree(final SparseBloomFilter filter) {
+        final Object store = field(filter, "indices");
+        final int size = (Integer) field(store, "size");
+        final int[] keys = (int[]) field(store, "keys");
+        final int[] left = (int[]) field(store, "left");
+        final int[] right = (int[]) field(store, "right");
+        final int[] next = (int[]) field(store, "next");
+        final byte[] heights = (byte[]) field(store, "heights");
+        final boolean[] visited = new boolean[size];
+        verifyNode((Integer) field(store, "root"), Long.MIN_VALUE, Long.MAX_VALUE,
+                keys, left, right, heights, visited);
+        int at = (Integer) field(store, "first");
+        int last = -1;
+        for (int i = 0; i < size; i++) {
+            check(visited[i], "unreachable AVL slot");
+            check(at >= 0 && at < size, "successor bounds/cycle");
+            if (last != -1) {
+                check(keys[last] < keys[at], "successor key ordering");
+            }
+            check(filter.contains(IndexExtractor.fromIndexArray(keys[at])), "AVL lookup");
+            last = at;
+            at = next[at];
+        }
+        check(at == -1 && (Integer) field(store, "last") == last, "successor end");
+        check(filter.cardinality() == size, "AVL cardinality");
+    }
+
     public static void verify() {
         checks = 0;
         digest = 0x13579BDFL;
@@ -133,6 +176,15 @@ public final class SparseDensePeerContract {
                             "geometric growth endpoint");
                     check(field(field(direct, "indices"), "modCount").equals(
                             field(field(oldPath, "indices"), "modCount")), "modCount");
+                    verifyTree(direct);
+                    verifyTree(byBitMaps);
+                    verifyTree(byBloom);
+                    final int followUp = Math.max(0, bits - 1);
+                    equalOutcome(outcome(() -> oldPath.merge(IndexExtractor.fromIndexArray(followUp))),
+                            outcome(() -> direct.merge(IndexExtractor.fromIndexArray(followUp))),
+                            "subsequent AVL insertion");
+                    same(oldPath.asIndexArray(), direct.asIndexArray(), "subsequent tree update");
+                    verifyTree(direct);
                 }
             }
         }
@@ -146,6 +198,17 @@ public final class SparseDensePeerContract {
             equalOutcome(outcome(() -> original.merge(IndexExtractor.fromBitMapExtractor(src))),
                     outcome(() -> candidate.merge((IndexExtractor) src)), "tail exception behavior");
             same(original.asIndexArray(), candidate.asIndexArray(), "tail partial result");
+        }
+        // Shape mismatch and invalid tail bits must retain the original
+        // successful prefix, post-merge exception and a searchable AVL.
+        for (final int sourceBits : new int[] {1024, 4095, 8191}) {
+            final SimpleBloomFilter src = source(sourceBits, 0, 37);
+            final SparseBloomFilter a = receiver(511, 3);
+            final SparseBloomFilter b = a.copy();
+            equalOutcome(outcome(() -> a.merge(IndexExtractor.fromBitMapExtractor(src))),
+                    outcome(() -> b.merge((IndexExtractor) src)), "large invalid shape");
+            same(a.asIndexArray(), b.asIndexArray(), "large invalid prefix");
+            verifyTree(b);
         }
         // Arbitrary producers still supply observable callbacks and failures.
         final SparseBloomFilter target = receiver(1024, 1);
