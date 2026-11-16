@@ -21,6 +21,7 @@ import java.io.InvalidObjectException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.lang.reflect.Array;
+import java.util.Collection;
 import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.Map;
@@ -343,6 +344,86 @@ public abstract class AbstractMapMultiSet<E> extends AbstractMultiSet<E> {
             }
         }
         return oldCount;
+    }
+
+    /**
+     * Exact HashMultiSet peers already store their repeated occurrences as
+     * primitive counts. For stable built-in value keys, avoid expanding each
+     * stored count into repeated virtual add(E) calls.
+     */
+    @Override
+    public boolean addAll(final Collection<? extends E> coll) {
+        if (canAggregateMultiSetCounts(coll)) {
+            @SuppressWarnings("unchecked")
+            final HashMultiSet<? extends E> source = (HashMultiSet<? extends E>) coll;
+            for (final Map.Entry<? extends E, MutableInteger> entry : source.getMap().entrySet()) {
+                final int copies = entry.getValue().value;
+                add(entry.getKey(), copies);
+                // AbstractCollection.addAll normally calls add(E) for every
+                // occurrence, each incrementing this owner's modCount.
+                modCount += copies - 1;
+            }
+            // MultiSet.add(E) reports true even for an existing or saturated
+            // count; the source is nonempty after the guarded preflight.
+            return true;
+        }
+        return super.addAll(coll);
+    }
+
+    /**
+     * The inherited MultiSet.removeAll removes every count of each matching
+     * element on its first occurrence. A counted peer needs one lookup and
+     * removal per unique key, not one per repeated input occurrence.
+     */
+    @Override
+    public boolean removeAll(final Collection<?> coll) {
+        if (canAggregateMultiSetCounts(coll)) {
+            final HashMultiSet<?> source = (HashMultiSet<?>) coll;
+            boolean changed = false;
+            for (final Map.Entry<?, MutableInteger> entry : source.getMap().entrySet()) {
+                final Object key = entry.getKey();
+                final int current = getCount(key);
+                if (current > 0) {
+                    changed |= remove(key, current) != 0;
+                }
+            }
+            return changed;
+        }
+        return super.removeAll(coll);
+    }
+
+    /**
+     * Source and destination must be unmodified exact HashMultiSets. The
+     * fallback protects subclasses, self-iteration, and user hash/equals
+     * callbacks, which the original expanded iterator invokes repeatedly.
+     */
+    private boolean canAggregateMultiSetCounts(final Collection<?> coll) {
+        if (coll == null || coll == this || getClass() != HashMultiSet.class
+                || coll.getClass() != HashMultiSet.class || coll.size() < 128) {
+            return false;
+        }
+        final HashMultiSet<?> source = (HashMultiSet<?>) coll;
+        final Map<?, MutableInteger> counts = source.getMap();
+        if ((long) counts.size() * 8L > coll.size()) {
+            return false;
+        }
+        for (final Map.Entry<?, MutableInteger> entry : counts.entrySet()) {
+            final MutableInteger value = entry.getValue();
+            if (value == null || value.value < 1 || !isImmutableCountKey(entry.getKey())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean isImmutableCountKey(final Object key) {
+        if (key == null) {
+            return true;
+        }
+        final Class<?> type = key.getClass();
+        return type == String.class || type == Integer.class || type == Long.class
+                || type == Boolean.class || type == Byte.class || type == Short.class
+                || type == Character.class || type == Float.class || type == Double.class;
     }
 
     /**
