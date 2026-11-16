@@ -20,8 +20,11 @@ package org.apache.commons.collections4.collection;
 import java.io.Serializable;
 import java.lang.reflect.Array;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Predicate;
@@ -31,6 +34,7 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.collections4.IterableUtils;
 import org.apache.commons.collections4.iterators.EmptyIterator;
 import org.apache.commons.collections4.iterators.IteratorChain;
+import org.apache.commons.collections4.list.TreeList;
 import org.apache.commons.collections4.list.UnmodifiableList;
 
 /**
@@ -295,11 +299,134 @@ public class CompositeCollection<E> implements Collection<E>, Serializable {
      */
     @Override
     public Iterator<E> iterator() {
+        if (getClass() == CompositeCollection.class && all != null && all.getClass() == ArrayList.class && hasNestedComposite()) {
+            final Iterator<E> iterator = iteratorForKnownCollections();
+            if (iterator != null) {
+                return iterator;
+            }
+        }
+        return iteratorRecursively();
+    }
+
+    /** Avoids planning shallow composites, which have no hidden chains to eliminate. */
+    private boolean hasNestedComposite() {
+        for (int i = 0; i < all.size(); i++) {
+            // Classify raw values without moving cast/null failures before callbacks.
+            final Object item = ((List<?>) all).get(i);
+            if (item != null && item.getClass() == CompositeCollection.class) {
+                final CompositeCollection<?> child = (CompositeCollection<?>) item;
+                if (child.all != null && child.all.getClass() == ArrayList.class) {
+                    for (int j = 0; j < child.all.size(); j++) {
+                        final Object nested = ((List<?>) child.all).get(j);
+                        if (nested != null && nested.getClass() == CompositeCollection.class) {
+                            final CompositeCollection<?> descendant = (CompositeCollection<?>) nested;
+                            if (descendant.all != null && descendant.all.getClass() == ArrayList.class && !descendant.all.isEmpty()) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Builds known paths iteratively while preserving each immediate root child.
+     * <p>
+     * The first pass validates the complete graph without leaf callbacks. The second
+     * reuses the same ancestry storage and eagerly creates leaf iterators in encounter
+     * order. Only privately generated descendant chains are compressed. Shared branches
+     * are visited per occurrence; unknown owners and cycles retain the legacy route.
+     * </p>
+     */
+    @SuppressWarnings("unchecked")
+    private Iterator<E> iteratorForKnownCollections() {
+        final IdentityHashMap<CompositeCollection<?>, Boolean> active = new IdentityHashMap<>();
+        CompositeCollection<?>[] path = new CompositeCollection<?>[8];
+        int[] positions = new int[8];
+        IteratorChain<E> chain = null;
+        for (int pass = 0; pass < 2; pass++) {
+            if (pass != 0) {
+                chain = new IteratorChain<>();
+            }
+            Iterator<E> first = null;
+            IteratorChain<E> childChain = null;
+            int depth = 0;
+            path[0] = this;
+            positions[0] = 0;
+            active.put(this, Boolean.TRUE);
+            while (depth >= 0) {
+                final CompositeCollection<?> owner = path[depth];
+                if (positions[depth] == owner.all.size()) {
+                    active.remove(owner);
+                    path[depth] = null;
+                    if (depth-- == 1 && chain != null) {
+                        // size(), locking and queue transitions expose this boundary.
+                        // A single private leaf needs no extra chain around it.
+                        chain.addIterator(childChain == null ? first : childChain);
+                    }
+                    continue;
+                }
+                final Object item = ((List<?>) owner.all).get(positions[depth]++);
+                if (item == null) {
+                    return null;
+                }
+                final Class<?> type = item.getClass();
+                if (type == CompositeCollection.class) {
+                    final CompositeCollection<?> child = (CompositeCollection<?>) item;
+                    if (child.all == null || child.all.getClass() != ArrayList.class) {
+                        return null;
+                    }
+                    if (!child.all.isEmpty()) {
+                        if (active.put(child, Boolean.TRUE) != null) {
+                            return null;
+                        }
+                        if (depth + 1 == path.length) {
+                            final int capacity = (int) Math.min(Integer.MAX_VALUE - 8L,
+                                    path.length + (long) path.length);
+                            if (capacity <= path.length) {
+                                throw new OutOfMemoryError("CompositeCollection path capacity exhausted");
+                            }
+                            path = Arrays.copyOf(path, capacity);
+                            positions = Arrays.copyOf(positions, capacity);
+                        }
+                        if (depth == 0) {
+                            first = null;
+                            childChain = null;
+                        }
+                        path[++depth] = child;
+                        positions[depth] = 0;
+                        continue;
+                    }
+                } else if (type != ArrayList.class && type != LinkedList.class && type != TreeList.class) {
+                    return null;
+                }
+                if (chain != null) {
+                    final Iterator<E> leaf = ((Collection<E>) item).iterator();
+                    if (depth == 0) {
+                        chain.addIterator(leaf);
+                    } else if (first == null) {
+                        first = leaf;
+                    } else if (childChain == null) {
+                        childChain = new IteratorChain<>(first, leaf);
+                    } else {
+                        childChain.addIterator(leaf);
+                    }
+                }
+            }
+        }
+        return chain;
+    }
+
+    /** Keeps one legacy continuation per composite when callbacks require it. */
+    private Iterator<E> iteratorRecursively() {
         if (all.isEmpty()) {
             return EmptyIterator.<E>emptyIterator();
         }
         final IteratorChain<E> chain = new IteratorChain<>();
-        all.forEach(item -> chain.addIterator(item.iterator()));
+        all.forEach(item -> chain.addIterator(item != null && item.getClass() == CompositeCollection.class
+                ? ((CompositeCollection<E>) item).iteratorRecursively() : item.iterator()));
         return chain;
     }
 
