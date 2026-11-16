@@ -379,7 +379,13 @@ public class TransformerUtils {
         final int size = objects.size();
         final Transformer<? super I, ? extends O>[] trs = new Transformer[size];
         final Predicate<I>[] preds = new Predicate[size];
-        int i = 0;
+        final int i = 0;
+        return switchMapTransformerRest(objects, preds, i, trs, def);
+    }
+
+    private static <I, O> Transformer<I, O> switchMapTransformerRest(final Map<I, Transformer<I, O>> objects,
+            final Predicate<I>[] preds, int i, final Transformer<? super I, ? extends O>[] trs,
+            final Transformer<? super I, ? extends O> def) {
         for (final Map.Entry<I, Transformer<I, O>> entry : objects.entrySet()) {
             preds[i] = EqualPredicate.<I>equalPredicate(entry.getKey());
             trs[i++] = entry.getValue();

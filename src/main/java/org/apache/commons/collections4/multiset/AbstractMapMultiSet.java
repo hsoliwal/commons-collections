@@ -161,6 +161,10 @@ public abstract class AbstractMapMultiSet<E> extends AbstractMultiSet<E> {
             } else {
                 entryIterator.remove();
             }
+            removeRest2();
+        }
+
+        private void removeRest2() {
             parent.size--;
             canRemove = false;
         }
@@ -323,7 +327,10 @@ public abstract class AbstractMapMultiSet<E> extends AbstractMultiSet<E> {
 
         final MutableInteger mut = map.get(object);
         final int oldCount = mut != null ? mut.value : 0;
+        return addRest(occurrences, mut, object, oldCount);
+    }
 
+    private int addRest(final int occurrences, final MutableInteger mut, final E object, final int oldCount) {
         if (occurrences > 0) {
             modCount++;
             if (mut == null) {
@@ -421,6 +428,10 @@ public abstract class AbstractMapMultiSet<E> extends AbstractMultiSet<E> {
         if (other.size() != size()) {
             return false;
         }
+        return equalsRest(other);
+    }
+
+    private boolean equalsRest(final MultiSet<?> other) {
         for (final E element : map.keySet()) {
             if (other.getCount(element) != getCount(element)) {
                 return false;
@@ -498,6 +509,10 @@ public abstract class AbstractMapMultiSet<E> extends AbstractMultiSet<E> {
             return 0;
         }
         final int oldCount = mut.value;
+        return removeRest(occurrences, mut, object, oldCount);
+    }
+
+    private int removeRest(final int occurrences, final MutableInteger mut, final Object object, final int oldCount) {
         if (occurrences > 0) {
             modCount++;
             if (occurrences < mut.value) {
@@ -543,7 +558,11 @@ public abstract class AbstractMapMultiSet<E> extends AbstractMultiSet<E> {
     @Override
     public Object[] toArray() {
         final Object[] result = new Object[size()];
-        int i = 0;
+        final int i = 0;
+        return toArrayRest(result, i);
+    }
+
+    private Object[] toArrayRest(final Object[] result, int i) {
         for (final Map.Entry<E, MutableInteger> entry : map.entrySet()) {
             final E current = entry.getKey();
             final int count = entry.getValue().value;

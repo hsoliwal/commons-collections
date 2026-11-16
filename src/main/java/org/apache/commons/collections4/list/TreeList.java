@@ -124,6 +124,10 @@ public class TreeList<E> extends AbstractList<E> {
             } while (proposed < required);
             final int capacity = (int) proposed;
             final Object[] newValues = Arrays.copyOf(values, capacity);
+            growRest(capacity, newValues);
+        }
+
+        private void growRest(final int capacity, final Object[] newValues) {
             final int[] newLeft = Arrays.copyOf(left, capacity);
             final int[] newRight = Arrays.copyOf(right, capacity);
             final int[] newPositions = Arrays.copyOf(relativePosition, capacity);
@@ -218,6 +222,11 @@ public class TreeList<E> extends AbstractList<E> {
             final E value = iterator.next();
             values[slot] = value;
             relativePosition[slot] = mid - parentPosition;
+            buildRest3(mid, end, slot, remaining, iterator);
+        }
+
+        private void buildRest3(final int mid, final int end, final int slot, int remaining,
+                final Iterator<? extends E> iterator) {
             if (mid < end) {
                 final int child = acquireBuildSlot(slot, right[slot], remaining);
                 right[slot] = child;
@@ -246,6 +255,11 @@ public class TreeList<E> extends AbstractList<E> {
             acquired[++acquired[0]] = slot;
             final int mid = start + (end - start) / 2;
             state[slot] = LIVE;
+            return buildRest(start, mid, iterator, previous, slot, acquired, parentPosition, end, next);
+        }
+
+        private int buildRest(final int start, final int mid, final Iterator<? extends E> iterator, final int previous,
+                final int slot, final int[] acquired, final int parentPosition, final int end, final int next) {
             if (start < mid) {
                 final int child = build(iterator, start, mid - 1, mid, previous, slot, acquired);
                 left[slot] = child;
@@ -256,6 +270,11 @@ public class TreeList<E> extends AbstractList<E> {
             final E value = iterator.next();
             values[slot] = value;
             relativePosition[slot] = mid - parentPosition;
+            return buildRest2(mid, end, iterator, slot, next, acquired);
+        }
+
+        private int buildRest2(final int mid, final int end, final Iterator<? extends E> iterator, final int slot,
+                final int next, final int[] acquired) {
             if (mid < end) {
                 final int child = build(iterator, mid + 1, end, mid, slot, next, acquired);
                 right[slot] = child;
@@ -367,6 +386,10 @@ public class TreeList<E> extends AbstractList<E> {
                 cursor = left[cursor];
                 position += relativePosition[cursor];
             }
+            return indexOfRest(cursor, object, position);
+        }
+
+        private int indexOfRest(int cursor, final Object object, int position) {
             while (cursor != NONE) {
                 if (Objects.equals(values[cursor], object)) {
                     return position;
@@ -481,6 +504,10 @@ public class TreeList<E> extends AbstractList<E> {
             if (relative == 0) {
                 return removeSelf(slot);
             }
+            return removeRest3(relative, slot);
+        }
+
+        private int removeRest3(final int relative, final int slot) {
             if (relative > 0) {
                 setRight(slot, remove(right[slot], relative), right[right[slot]]);
                 if (relativePosition[slot] < 0) {
@@ -708,12 +735,21 @@ public class TreeList<E> extends AbstractList<E> {
             final long suffix = rebuildRange(right[root], length - leftSize - 1);
             final int rightRoot = (int) (suffix >>> 32);
             state[root] = LIVE;
+            return rebuildRangeRest(leftRoot, root, leftSize, rightRoot, suffix);
+        }
+
+        private long rebuildRangeRest(final int leftRoot, final int root, final int leftSize, final int rightRoot,
+                final long suffix) {
             if (leftRoot == NONE) {
                 state[root] |= LEFT_PREVIOUS;
             } else {
                 left[root] = leftRoot;
                 relativePosition[leftRoot] -= leftSize;
             }
+            return rebuildRangeRest2(rightRoot, root, leftSize, suffix);
+        }
+
+        private long rebuildRangeRest2(final int rightRoot, final int root, final int leftSize, final long suffix) {
             if (rightRoot == NONE) {
                 state[root] |= RIGHT_NEXT;
             } else {
@@ -967,6 +1003,10 @@ public class TreeList<E> extends AbstractList<E> {
             // the AVL node referenced by next may have become stale after a remove
             // reset it now: will be retrieved by next call to next()/previous() via nextIndex
             next = -1;
+            removeRest2();
+        }
+
+        private void removeRest2() {
             current = -1;
             currentIndex = -1;
             expectedModCount++;
@@ -1090,6 +1130,10 @@ public class TreeList<E> extends AbstractList<E> {
         // No snapshot, growth, or user callbacks occur on this exact-class path.
         root = slots.insertRange(root, index, c, added, size + added);
         size += added;
+        return addAllRest(added);
+    }
+
+    private boolean addAllRest(final int added) {
         modCount += added;
         return true;
     }
@@ -1286,6 +1330,10 @@ public class TreeList<E> extends AbstractList<E> {
         // Preserve subclass get() callbacks, including their return value and failures.
         final E result = get(index);
         root = slots.remove(root, index);
+        return removeRest(result);
+    }
+
+    private E removeRest(final E result) {
         slots.releaseDetached();
         size--;
         return result;
@@ -1450,6 +1498,10 @@ public class TreeList<E> extends AbstractList<E> {
             result[index] = (T) slots.values[slot];
             slot = slots.next(slot);
         }
+        return toArrayRest(result, length);
+    }
+
+    private static <T> T[] toArrayRest(final T[] result, final int length) {
         if (result.length > length) {
             result[length] = null;
         }

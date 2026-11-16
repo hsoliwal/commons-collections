@@ -117,6 +117,10 @@ public class BitMaps {
         // Divide half the unsigned number and then double the quotient result.
         final long quotient = (dividend >>> 1) / divisor << 1;
         final long remainder = dividend - quotient * divisor;
+        return modRest(remainder, divisor);
+    }
+
+    private static int modRest(final long remainder, final int divisor) {
         // remainder in [0, 2 * divisor)
         return (int) (remainder >= divisor ? remainder - divisor : remainder);
     }

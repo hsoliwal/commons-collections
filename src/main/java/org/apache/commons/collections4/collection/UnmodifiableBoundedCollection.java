@@ -86,7 +86,10 @@ public final class UnmodifiableBoundedCollection<E> extends AbstractCollectionDe
     @SuppressWarnings("unchecked")
     public static <E> BoundedCollection<E> unmodifiableBoundedCollection(Collection<? extends E> collection) {
         Objects.requireNonNull(collection, "collection");
+        return unmodifiableBoundedCollectionRest(collection);
+    }
 
+    private static <E> BoundedCollection<E> unmodifiableBoundedCollectionRest(Collection<? extends E> collection) {
         // handle decorators
         for (int i = 0; i < 1000; i++) {  // counter to prevent infinite looping
             if (collection instanceof BoundedCollection) {
@@ -98,7 +101,10 @@ public final class UnmodifiableBoundedCollection<E> extends AbstractCollectionDe
                 collection = ((SynchronizedCollection<E>) collection).decorated();
             }
         }
+        return unmodifiableBoundedCollectionRest2(collection);
+    }
 
+    private static <E> BoundedCollection<E> unmodifiableBoundedCollectionRest2(Collection<? extends E> collection) {
         if (!(collection instanceof BoundedCollection)) {
             throw new IllegalArgumentException("Collection is not a bounded collection.");
         }

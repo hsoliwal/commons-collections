@@ -851,6 +851,10 @@ public class IteratorUtils {
         if (obj instanceof Object[]) {
             return new ObjectArrayIterator<>((Object[]) obj);
         }
+        return getIteratorRest(obj);
+    }
+
+    private static Iterator<?> getIteratorRest(final Object obj) {
         if (obj instanceof Enumeration) {
             return new EnumerationIterator<>((Enumeration<?>) obj);
         }
@@ -863,12 +867,20 @@ public class IteratorUtils {
         if (obj instanceof Node) {
             return new NodeListIterator((Node) obj);
         }
+        return getIteratorRest2(obj);
+    }
+
+    private static Iterator<?> getIteratorRest2(final Object obj) {
         if (obj instanceof Dictionary) {
             return new EnumerationIterator<>(((Dictionary<?, ?>) obj).elements());
         }
         if (obj.getClass().isArray()) {
             return new ArrayIterator<>(obj);
         }
+        return getIteratorRest3(obj);
+    }
+
+    private static Iterator<?> getIteratorRest3(final Object obj) {
         try {
             final Method method = obj.getClass().getMethod("iterator", (Class[]) null);
             if (Iterator.class.isAssignableFrom(method.getReturnType())) {
@@ -1393,6 +1405,12 @@ public class IteratorUtils {
         Objects.requireNonNull(prefix, "prefix");
         Objects.requireNonNull(suffix, "suffix");
         final StringBuilder stringBuilder = new StringBuilder(prefix);
+        return toStringRest(iterator, stringBuilder, transformer, delimiter, prefix, suffix);
+    }
+
+    private static <E> String toStringRest(final Iterator<E> iterator, final StringBuilder stringBuilder,
+            final Transformer<? super E, String> transformer, final String delimiter, final String prefix,
+            final String suffix) {
         if (iterator != null) {
             while (iterator.hasNext()) {
                 final E element = iterator.next();
@@ -1403,6 +1421,10 @@ public class IteratorUtils {
                 stringBuilder.setLength(stringBuilder.length() - delimiter.length());
             }
         }
+        return toStringRest2(stringBuilder, suffix);
+    }
+
+    private static <E> String toStringRest2(final StringBuilder stringBuilder, final String suffix) {
         stringBuilder.append(suffix);
         return stringBuilder.toString();
     }

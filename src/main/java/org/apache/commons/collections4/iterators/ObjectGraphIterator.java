@@ -176,7 +176,10 @@ public class ObjectGraphIterator<E> implements Iterator<E> {
             }
             currentIterator = iterator;
         }
+        findNextByIteratorRest();
+    }
 
+    private void findNextByIteratorRest() {
         while (currentIterator.hasNext() && !hasNext) {
             E next = currentIterator.next();
             if (transformer != null) {

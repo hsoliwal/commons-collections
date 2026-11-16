@@ -180,6 +180,10 @@ public abstract class AbstractDualBidiMap<K, V> implements BidiMap<K, V> {
             }
             final Map.Entry<?, ?> entry = (Map.Entry<?, ?>) obj;
             final Object key = entry.getKey();
+            return removeRest(key, entry);
+        }
+
+        private boolean removeRest(final Object key, final Map.Entry<?, ?> entry) {
             if (parent.containsKey(key)) {
                 final V value = parent.normalMap.get(key);
                 if (Objects.equals(value, entry.getValue())) {
@@ -514,8 +518,12 @@ public abstract class AbstractDualBidiMap<K, V> implements BidiMap<K, V> {
             if (parent.isEmpty() || Objects.isNull(filter)) {
                 return false;
             }
-            boolean modified = false;
+            final boolean modified = false;
             final Iterator<?> it = iterator();
+            return removeIfRest(it, filter, modified);
+        }
+
+        private boolean removeIfRest(final Iterator<?> it, final Predicate<? super E> filter, boolean modified) {
             while (it.hasNext()) {
                 @SuppressWarnings("unchecked")
                 final E e = (E) it.next();
@@ -545,8 +553,12 @@ public abstract class AbstractDualBidiMap<K, V> implements BidiMap<K, V> {
                 parent.clear();
                 return true;
             }
-            boolean modified = false;
+            final boolean modified = false;
             final Iterator<E> it = iterator();
+            return retainAllRest(it, coll, modified);
+        }
+
+        private boolean retainAllRest(final Iterator<E> it, final Collection<?> coll, boolean modified) {
             while (it.hasNext()) {
                 if (!coll.contains(it.next())) {
                     it.remove();

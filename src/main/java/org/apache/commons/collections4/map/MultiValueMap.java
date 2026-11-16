@@ -424,8 +424,12 @@ public class MultiValueMap<K, V> extends AbstractMapDecorator<K, Object> impleme
     @Override
     @SuppressWarnings("unchecked")
     public Object put(final K key, final Object value) {
-        boolean result = false;
-        Collection<V> coll = getCollection(key);
+        final boolean result = false;
+        final Collection<V> coll = getCollection(key);
+        return putRest(coll, value, key, result);
+    }
+
+    private Object putRest(Collection<V> coll, final Object value, final K key, boolean result) {
         if (coll == null) {
             coll = createCollection(1);  // might produce a non-empty collection
             coll.add((V) value);
@@ -452,8 +456,12 @@ public class MultiValueMap<K, V> extends AbstractMapDecorator<K, Object> impleme
         if (values == null || values.isEmpty()) {
             return false;
         }
-        boolean result = false;
-        Collection<V> coll = getCollection(key);
+        final boolean result = false;
+        final Collection<V> coll = getCollection(key);
+        return putAllRest(coll, values, key, result);
+    }
+
+    private boolean putAllRest(Collection<V> coll, final Collection<V> values, final K key, boolean result) {
         if (coll == null) {
             coll = createCollection(values.size());  // might produce a non-empty collection
             coll.addAll(values);

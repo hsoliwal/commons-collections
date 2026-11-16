@@ -162,7 +162,10 @@ public class NullComparator<E> implements Comparator<E>, Serializable {
         }
 
         final NullComparator<?> other = (NullComparator<?>) obj;
+        return equalsRest(other);
+    }
 
+    private boolean equalsRest(final NullComparator<?> other) {
         return nullsAreHigh == other.nullsAreHigh &&
                 nonNullComparator.equals(other.nonNullComparator);
     }

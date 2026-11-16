@@ -242,6 +242,10 @@ public abstract class AbstractReferenceMap<K, V> extends AbstractHashedMap<K, V>
             final Map.Entry<?, ?> entry = (Map.Entry<?, ?>) obj;
             final Object entryKey = entry.getKey();  // convert to hard reference
             final Object entryValue = entry.getValue();  // convert to hard reference
+            return equalsRest(entryKey, entryValue);
+        }
+
+        private boolean equalsRest(final Object entryKey, final Object entryValue) {
             if (entryKey == null || entryValue == null) {
                 return false;
             }
@@ -832,7 +836,11 @@ public abstract class AbstractReferenceMap<K, V> extends AbstractHashedMap<K, V>
         final int capacity = in.readInt();
         init();
         data = new HashEntry[capacity];
+        doReadObjectRest(in);
+        // do not call super.doReadObject() as code there doesn't work for reference map
+    }
 
+    private void doReadObjectRest(final ObjectInputStream in) throws IOException, ClassNotFoundException {
         // COLLECTIONS-599: Calculate threshold before populating, otherwise it will be 0
         // when it hits AbstractHashedMap.checkCapacity() and so will unnecessarily
         // double up the size of the "data" array during population.
@@ -840,7 +848,10 @@ public abstract class AbstractReferenceMap<K, V> extends AbstractHashedMap<K, V>
         // NB: AbstractHashedMap.doReadObject() DOES calculate the threshold before populating.
         //
         threshold = calculateThreshold(data.length, loadFactor);
+        doReadObjectRest2(in);
+    }
 
+    private void doReadObjectRest2(final ObjectInputStream in) throws IOException, ClassNotFoundException {
         while (true) {
             final K key = (K) in.readObject();
             if (key == null) {
@@ -849,7 +860,6 @@ public abstract class AbstractReferenceMap<K, V> extends AbstractHashedMap<K, V>
             final V value = (V) in.readObject();
             put(key, value);
         }
-        // do not call super.doReadObject() as code there doesn't work for reference map
     }
 
     /**

@@ -129,6 +129,11 @@ public class SetUtils {
         Objects.requireNonNull(setA, "setA");
         Objects.requireNonNull(setB, "setB");
         final Predicate<E> notContainedInB = object -> !setB.contains(object);
+        return differenceRest(setA, setB, notContainedInB);
+    }
+
+    private static <E> SetView<E> differenceRest(final Set<? extends E> setA, final Set<? extends E> setB,
+            final Predicate<E> notContainedInB) {
         return new SetView<E>() {
 
             @Override
@@ -277,6 +282,10 @@ public class SetUtils {
     public static <E> SetView<E> intersection(final Set<? extends E> setA, final Set<? extends E> setB) {
         Objects.requireNonNull(setA, "setA");
         Objects.requireNonNull(setB, "setB");
+        return intersectionRest(setA, setB);
+    }
+
+    private static <E> SetView<E> intersectionRest(final Set<? extends E> setA, final Set<? extends E> setB) {
         return new SetView<E>() {
 
             @Override

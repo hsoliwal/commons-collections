@@ -110,6 +110,10 @@ public abstract class AbstractMapBag<E> implements Bag<E> {
             } else {
                 entryIterator.remove();
             }
+            removeRest2();
+        }
+
+        private void removeRest2() {
             parent.size--;
             canRemove = false;
         }
@@ -269,6 +273,10 @@ public abstract class AbstractMapBag<E> implements Bag<E> {
         if ((long) sourceMap.size() * 8L > collection.size()) {
             return false;
         }
+        return canAggregateBagCountsRest(sourceMap);
+    }
+
+    private static boolean canAggregateBagCountsRest(final Map<?, MutableInteger> sourceMap) {
         for (final Entry<?, MutableInteger> entry : sourceMap.entrySet()) {
             final MutableInteger count = entry.getValue();
             final Object key = entry.getKey();
@@ -400,6 +408,10 @@ public abstract class AbstractMapBag<E> implements Bag<E> {
         if (other.size() != size()) {
             return false;
         }
+        return equalsRest(other);
+    }
+
+    private boolean equalsRest(final Bag<?> other) {
         for (final E element : map.keySet()) {
             if (other.getCount(element) != getCount(element)) {
                 return false;
@@ -510,6 +522,10 @@ public abstract class AbstractMapBag<E> implements Bag<E> {
             return false;
         }
         modCount++;
+        return removeRest(nCopies, mut, object);
+    }
+
+    private boolean removeRest(final int nCopies, final MutableInteger mut, final Object object) {
         if (nCopies < mut.value) {
             mut.value -= nCopies;
             size -= nCopies;
@@ -563,7 +579,7 @@ public abstract class AbstractMapBag<E> implements Bag<E> {
      * @return {@code true} if this call changed the collection
      */
     boolean retainAll(final Bag<?> other) {
-        boolean result = false;
+        final boolean result = false;
         final Bag<E> excess = new HashBag<>();
         for (final E current : uniqueSet()) {
             final int myCount = getCount(current);
@@ -574,6 +590,10 @@ public abstract class AbstractMapBag<E> implements Bag<E> {
                 excess.add(current, myCount);
             }
         }
+        return retainAllRest(excess, result);
+    }
+
+    private boolean retainAllRest(final Bag<E> excess, boolean result) {
         if (!excess.isEmpty()) {
             result = removeAll(excess);
         }
@@ -614,7 +634,11 @@ public abstract class AbstractMapBag<E> implements Bag<E> {
     @Override
     public Object[] toArray() {
         final Object[] result = new Object[size()];
-        int i = 0;
+        final int i = 0;
+        return toArrayRest(result, i);
+    }
+
+    private Object[] toArrayRest(final Object[] result, int i) {
         for (final E current : map.keySet()) {
             final int count = getCount(current);
             if (count >= 8 && count <= result.length - i) {
@@ -683,6 +707,10 @@ public abstract class AbstractMapBag<E> implements Bag<E> {
         final StringBuilder buf = new StringBuilder();
         buf.append(CollectionUtils.DEFAULT_TOSTRING_PREFIX);
         final Iterator<E> it = uniqueSet().iterator();
+        return toStringRest(it, buf);
+    }
+
+    private String toStringRest(final Iterator<E> it, final StringBuilder buf) {
         while (it.hasNext()) {
             final Object current = it.next();
             final int count = getCount(current);

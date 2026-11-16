@@ -137,6 +137,10 @@ public class ArrayListIterator<E> extends ArrayIterator<E>
                 return (E) values[index++];
             }
         }
+        return nextRest();
+    }
+
+    private E nextRest() {
         if (index >= 0 && index < endIndex) {
             return (E) primitiveAt(array, index++);
         }
@@ -173,6 +177,10 @@ public class ArrayListIterator<E> extends ArrayIterator<E>
                 return (E) values[index];
             }
         }
+        return previousRest();
+    }
+
+    private E previousRest() {
         if (index >= 0 && index < endIndex) {
             return (E) primitiveAt(array, index);
         }

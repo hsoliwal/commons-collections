@@ -91,7 +91,10 @@ abstract class AbstractInputCheckedMapDecorator<K, V>
             for (int i = 0; i < result.length; i++) {
                 result[i] = new MapEntry((Map.Entry<K, V>) result[i], parent);
             }
+            return toArrayRest(result, array);
+        }
 
+        private <T> T[] toArrayRest(Object[] result, final T[] array) {
             // check to see if result should be returned straight
             if (result.length > array.length) {
                 return (T[]) result;

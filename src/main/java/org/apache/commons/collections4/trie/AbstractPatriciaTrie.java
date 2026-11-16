@@ -465,6 +465,10 @@ public abstract class AbstractPatriciaTrie<K, V> extends AbstractBitwiseTrie<K, 
                     needsFixing = true;
                 }
                 super.remove();
+                removeRest2(bitIdx, needsFixing);
+            }
+
+            private void removeRest2(final int bitIdx, boolean needsFixing) {
                 // If the subtree changed its bitIndex or we
                 // removed the old subtree, get a new one.
                 if (bitIdx != subtree.bitIndex || needsFixing) {
@@ -929,6 +933,10 @@ public abstract class AbstractPatriciaTrie<K, V> extends AbstractBitwiseTrie<K, 
                 return false;
             }
             final TrieEntry<K, V> node = getEntry(key);
+            return removeRest(node, entry);
+        }
+
+        private boolean removeRest(final TrieEntry<K, V> node, final Map.Entry<K, V> entry) {
             if (node != null && compare(node.getValue(), entry.getValue())) {
                 removeEntry(node);
                 return true;
@@ -1045,6 +1053,10 @@ public abstract class AbstractPatriciaTrie<K, V> extends AbstractBitwiseTrie<K, 
             }
             buffer.append("key=").append(getKey()).append(" [").append(bitIndex).append("], ");
             buffer.append("value=").append(getValue()).append(", ");
+            return toStringRest(buffer);
+        }
+
+        private String toStringRest(final StringBuilder buffer) {
             // buffer.append("bitIndex=").append(bitIndex).append(", ");
             if (parent != null) {
                 if (parent.bitIndex == -1) {
@@ -1056,6 +1068,10 @@ public abstract class AbstractPatriciaTrie<K, V> extends AbstractBitwiseTrie<K, 
                 buffer.append("parent=").append("null");
             }
             buffer.append(", ");
+            return toStringRest2(buffer);
+        }
+
+        private String toStringRest2(final StringBuilder buffer) {
             if (left != null) {
                 if (left.bitIndex == -1) {
                     buffer.append("left=").append("ROOT");
@@ -1066,6 +1082,10 @@ public abstract class AbstractPatriciaTrie<K, V> extends AbstractBitwiseTrie<K, 
                 buffer.append("left=").append("null");
             }
             buffer.append(", ");
+            return toStringRest3(buffer);
+        }
+
+        private String toStringRest3(final StringBuilder buffer) {
             if (right != null) {
                 if (right.bitIndex == -1) {
                     buffer.append("right=").append("ROOT");
@@ -1076,6 +1096,10 @@ public abstract class AbstractPatriciaTrie<K, V> extends AbstractBitwiseTrie<K, 
                 buffer.append("right=").append("null");
             }
             buffer.append(", ");
+            return toStringRest4(buffer);
+        }
+
+        private String toStringRest4(final StringBuilder buffer) {
             if (predecessor != null) {
                 if (predecessor.bitIndex == -1) {
                     buffer.append("predecessor=").append("ROOT");
@@ -1911,13 +1935,21 @@ public abstract class AbstractPatriciaTrie<K, V> extends AbstractBitwiseTrie<K, 
             }
             return followRight(start.predecessor.left);
         }
-        TrieEntry<K, V> node = start.predecessor;
+        final TrieEntry<K, V> node = start.predecessor;
+        return previousEntryRest(node);
+    }
+
+    private TrieEntry<K, V> previousEntryRest(TrieEntry<K, V> node) {
         while (node.parent != null && node == node.parent.left) {
             node = node.parent;
         }
         if (node.parent == null) { // can be null if we're looking up root.
             return null;
         }
+        return previousEntryRest2(node);
+    }
+
+    private TrieEntry<K, V> previousEntryRest2(TrieEntry<K, V> node) {
         if (isValidUplink(node.parent.left, node.parent)) {
             if (node.parent.left == root) {
                 if (root.isEmpty()) {
@@ -2071,6 +2103,11 @@ public abstract class AbstractPatriciaTrie<K, V> extends AbstractBitwiseTrie<K, 
         }
         final TrieEntry<K, V> parent = h.parent;
         final TrieEntry<K, V> child = h.left == h ? h.right : h.left;
+        removeExternalEntryRest(parent, h, child);
+    }
+
+    private void removeExternalEntryRest(final TrieEntry<K, V> parent, final TrieEntry<K, V> h,
+            final TrieEntry<K, V> child) {
         if (parent.left == h) {
             parent.left = child;
         } else {
@@ -2219,6 +2256,11 @@ public abstract class AbstractPatriciaTrie<K, V> extends AbstractBitwiseTrie<K, 
             }
             return true;
         }
+        return selectRRest(key, h, lengthInBits, reference);
+    }
+
+    private boolean selectRRest(final K key, final TrieEntry<K, V> h, final int lengthInBits,
+            final Reference<Map.Entry<K, V>> reference) {
         if (!isBitSet(key, h.bitIndex, lengthInBits)) {
             if (selectR(h.left, h.bitIndex, key, lengthInBits, reference)) {
                 return selectR(h.right, h.bitIndex, key, lengthInBits, reference);
@@ -2277,8 +2319,13 @@ public abstract class AbstractPatriciaTrie<K, V> extends AbstractBitwiseTrie<K, 
      * @return the subtree entry.
      */
     TrieEntry<K, V> subtree(final K prefix, final int offsetInBits, final int lengthInBits) {
-        TrieEntry<K, V> current = root.left;
-        TrieEntry<K, V> path = root;
+        final TrieEntry<K, V> current = root.left;
+        final TrieEntry<K, V> path = root;
+        return subtreeRest(current, path, lengthInBits, prefix, offsetInBits);
+    }
+
+    private TrieEntry<K, V> subtreeRest(TrieEntry<K, V> current, TrieEntry<K, V> path, final int lengthInBits,
+            final K prefix, final int offsetInBits) {
         while (true) {
             if (current.bitIndex <= path.bitIndex || lengthInBits <= current.bitIndex) {
                 break;
@@ -2290,6 +2337,11 @@ public abstract class AbstractPatriciaTrie<K, V> extends AbstractBitwiseTrie<K, 
                 current = current.right;
             }
         }
+        return subtreeRest2(current, path, offsetInBits, lengthInBits, prefix);
+    }
+
+    private TrieEntry<K, V> subtreeRest2(TrieEntry<K, V> current, TrieEntry<K, V> path, final int offsetInBits,
+            final int lengthInBits, final K prefix) {
         // Make sure the entry is valid for a subtree.
         final TrieEntry<K, V> entry = current.isEmpty() ? path : current;
         // If entry is root, it can't be empty.
@@ -2297,6 +2349,11 @@ public abstract class AbstractPatriciaTrie<K, V> extends AbstractBitwiseTrie<K, 
             return null;
         }
         final int endIndexInBits = offsetInBits + lengthInBits;
+        return subtreeRest3(entry, endIndexInBits, prefix, lengthInBits, offsetInBits);
+    }
+
+    private TrieEntry<K, V> subtreeRest3(final TrieEntry<K, V> entry, final int endIndexInBits, final K prefix,
+            final int lengthInBits, final int offsetInBits) {
         // if root && length of root is less than length of lookup,
         // there's nothing.
         // (this prevents returning the whole subtree if root has an empty
@@ -2308,6 +2365,10 @@ public abstract class AbstractPatriciaTrie<K, V> extends AbstractBitwiseTrie<K, 
         }
         // ... or there are less than 'length' equal bits
         final int bitIndex = getKeyAnalyzer().bitIndex(prefix, offsetInBits, lengthInBits, entry.key, 0, lengthInBits(entry.getKey()));
+        return subtreeRest4(bitIndex, lengthInBits, entry);
+    }
+
+    private TrieEntry<K, V> subtreeRest4(final int bitIndex, final int lengthInBits, final TrieEntry<K, V> entry) {
         if (bitIndex >= 0 && bitIndex < lengthInBits) {
             return null;
         }

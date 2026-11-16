@@ -736,6 +736,10 @@ public class Flat3Map<K, V> implements IterableMap<K, V>, Serializable, Cloneabl
      */
     private void convertToMap() {
         delegateMap = createDelegateMap();
+        convertToMapRest();
+    }
+
+    private void convertToMapRest() {
         switch (size) {  // drop through
         case 3:
             delegateMap.put(key3, value3);
@@ -748,7 +752,10 @@ public class Flat3Map<K, V> implements IterableMap<K, V>, Serializable, Cloneabl
         default:
             throw new IllegalStateException("Invalid map index: " + size);
         }
+        convertToMapRest2();
+    }
 
+    private void convertToMapRest2() {
         size = 0;
         hash1 = hash2 = hash3 = 0;
         key1 = key2 = key3 = null;
@@ -900,7 +907,11 @@ public class Flat3Map<K, V> implements IterableMap<K, V>, Serializable, Cloneabl
         if (delegateMap != null) {
             return delegateMap.hashCode();
         }
-        int total = 0;
+        final int total = 0;
+        return hashCodeRest(total);
+    }
+
+    private int hashCodeRest(int total) {
         switch (size) {  // drop through
         case 3:
             total += hash3 ^ (value3 == null ? 0 : value3.hashCode());
@@ -1064,6 +1075,10 @@ public class Flat3Map<K, V> implements IterableMap<K, V>, Serializable, Cloneabl
             delegateMap.putAll(map);
             return;
         }
+        putAllRest(size, map);
+    }
+
+    private void putAllRest(final int size, final Map<? extends K, ? extends V> map) {
         if (size < 4) {
             for (final Map.Entry<? extends K, ? extends V> entry : map.entrySet()) {
                 put(entry.getKey(), entry.getValue());

@@ -128,6 +128,11 @@ public interface CellExtractor extends IndexExtractor {
                 final int[] newNext = Arrays.copyOf(next, capacity);
                 final byte[] newHeights = Arrays.copyOf(heights, capacity);
                 indices = newIndices;
+                growRest(newCounts, newLeft, newRight, newNext, newHeights);
+            }
+
+            private void growRest(final int[] newCounts, final int[] newLeft, final int[] newRight, final int[] newNext,
+                    final byte[] newHeights) {
                 counts = newCounts;
                 left = newLeft;
                 right = newRight;

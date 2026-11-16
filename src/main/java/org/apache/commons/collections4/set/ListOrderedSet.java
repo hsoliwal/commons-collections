@@ -265,9 +265,14 @@ public class ListOrderedSet<E>
         if (index < 0 || index > setOrder.size()) {
             throw new IndexOutOfBoundsException("Index: " + index + ", Size: " + setOrder.size());
         }
-        boolean changed = false;
+        final boolean changed = false;
         // collect all elements to be added for performance reasons
         final List<E> toAdd = new ArrayList<>();
+        return addAllRest(coll, toAdd, changed, index);
+    }
+
+    private boolean addAllRest(final Collection<? extends E> coll, final List<E> toAdd, boolean changed,
+            final int index) {
         for (final E e : coll) {
             if (contains(e)) {
                 continue;
@@ -276,7 +281,10 @@ public class ListOrderedSet<E>
             toAdd.add(e);
             changed = true;
         }
+        return addAllRest2(changed, index, toAdd);
+    }
 
+    private boolean addAllRest2(boolean changed, final int index, final List<E> toAdd) {
         if (changed) {
             setOrder.addAll(index, toAdd);
         }

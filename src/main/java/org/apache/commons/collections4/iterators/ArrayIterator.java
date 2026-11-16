@@ -180,6 +180,10 @@ public class ArrayIterator<E> implements ResettableIterator<E> {
                 return (E) values[index++];
             }
         }
+        return nextRest();
+    }
+
+    private E nextRest() {
         // Constructor-validated primitive ranges use direct typed loads.
         // Overridden hasNext() and package-local cursor corruption can admit
         // an invalid index: retain the original Array.get exception message.
@@ -208,6 +212,10 @@ public class ArrayIterator<E> implements ResettableIterator<E> {
         if (source instanceof float[]) {
             return ((float[]) source)[position];
         }
+        return primitiveAtRest(source, position);
+    }
+
+    private static Object primitiveAtRest(final Object source, final int position) {
         if (source instanceof short[]) {
             return ((short[]) source)[position];
         }

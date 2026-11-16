@@ -195,6 +195,10 @@ public class TreeBidiMap<K extends Comparable<K>, V extends Comparable<V>>
             }
             lastReturnedNode = previousNode;
             rememberLast();
+            return navigatePreviousRest();
+        }
+
+        private int navigatePreviousRest() {
             previousNode = previousNode == retiredSlot ? 0 : nextSmaller(previousNode, orderType);
             return lastReturnedNode;
         }
@@ -855,6 +859,11 @@ public class TreeBidiMap<K extends Comparable<K>, V extends Comparable<V>>
         final int[] newRightKey = Arrays.copyOf(rightKey, capacity);
         final int[] newParentKey = Arrays.copyOf(parentKey, capacity);
         final int[] newLeftValue = Arrays.copyOf(leftValue, capacity);
+        ensureCapacityRest(capacity, newKeys, newValues, newLeftKey, newRightKey, newParentKey, newLeftValue);
+    }
+
+    private void ensureCapacityRest(final int capacity, final Object[] newKeys, final Object[] newValues,
+            final int[] newLeftKey, final int[] newRightKey, final int[] newParentKey, final int[] newLeftValue) {
         final int[] newRightValue = Arrays.copyOf(rightValue, capacity);
         final int[] newParentValue = Arrays.copyOf(parentValue, capacity);
         final byte[] newColors = Arrays.copyOf(colors, capacity);
@@ -866,6 +875,10 @@ public class TreeBidiMap<K extends Comparable<K>, V extends Comparable<V>>
         parentKey = newParentKey;
         leftValue = newLeftValue;
         rightValue = newRightValue;
+        ensureCapacityRest2(newParentValue, newColors, newPages);
+    }
+
+    private void ensureCapacityRest2(final int[] newParentValue, final byte[] newColors, final HashPage[] newPages) {
         parentValue = newParentValue;
         colors = newColors;
         entryHashPages = newPages;
@@ -884,6 +897,10 @@ public class TreeBidiMap<K extends Comparable<K>, V extends Comparable<V>>
             ensureCapacity(nextSlot + 1);
             slot = nextSlot++;
         }
+        return allocateSlotRest(slot, key, value);
+    }
+
+    private int allocateSlotRest(final int slot, final K key, final V value) {
         keys[slot] = key;
         values[slot] = value;
         colors[slot] = 3;
@@ -899,6 +916,10 @@ public class TreeBidiMap<K extends Comparable<K>, V extends Comparable<V>>
         rightValue[slot] = 0;
         parentValue[slot] = 0;
         colors[slot] = 0;
+        releaseSlotRest(slot);
+    }
+
+    private void releaseSlotRest(final int slot) {
         if (entryHashPages != null && entryHashPages[slot] != null) {
             final HashPage page = entryHashPages[slot];
             entryHashPages[slot] = null;
@@ -1667,7 +1688,11 @@ public class TreeBidiMap<K extends Comparable<K>, V extends Comparable<V>>
         final StringBuilder buf = new StringBuilder(nodeCount * 32);
         buf.append('{');
         final MapIterator<?, ?> it = getMapIterator(dataElement);
-        boolean hasNext = it.hasNext();
+        final boolean hasNext = it.hasNext();
+        return doToStringRest(hasNext, it, buf);
+    }
+
+    private String doToStringRest(boolean hasNext, final MapIterator<?, ?> it, final StringBuilder buf) {
         while (hasNext) {
             final Object key = it.next();
             final Object value = it.getValue();
@@ -1680,7 +1705,10 @@ public class TreeBidiMap<K extends Comparable<K>, V extends Comparable<V>>
                 buf.append(", ");
             }
         }
+        return doToStringRest2(buf);
+    }
 
+    private static String doToStringRest2(final StringBuilder buf) {
         buf.append('}');
         return buf.toString();
     }
@@ -2243,7 +2271,10 @@ public class TreeBidiMap<K extends Comparable<K>, V extends Comparable<V>>
             setParent(getLeftChild(rightChild, dataElement), node, dataElement);
         }
         setParent(rightChild, getParent(node, dataElement), dataElement);
+        rotateLeftRest(node, dataElement, rightChild);
+    }
 
+    private void rotateLeftRest(final int node, final DataElement dataElement, final int rightChild) {
         if (getParent(node, dataElement) == 0) {
             // node was the root ... now its right child is the root
             rootNode[dataElement.ordinal()] = rightChild;
@@ -2271,7 +2302,10 @@ public class TreeBidiMap<K extends Comparable<K>, V extends Comparable<V>>
             setParent(getRightChild(leftChild, dataElement), node, dataElement);
         }
         setParent(leftChild, getParent(node, dataElement), dataElement);
+        rotateRightRest(node, dataElement, leftChild);
+    }
 
+    private void rotateRightRest(final int node, final DataElement dataElement, final int leftChild) {
         if (getParent(node, dataElement) == 0) {
             // node was the root ... now its left child is the root
             rootNode[dataElement.ordinal()] = leftChild;

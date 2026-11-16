@@ -158,6 +158,10 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
             @SuppressWarnings("unchecked")
             final Map.Entry<K, V> entry = (Map.Entry<K, V>) current[index];
             current[index] = null;
+            return nextEntryRest(entry);
+        }
+
+        private Map.Entry<K, V> nextEntryRest(final Map.Entry<K, V> entry) {
             last = entry;
             return last;
         }
@@ -739,7 +743,10 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
         buckets = new int[size];
         Arrays.fill(buckets, NONE);
         locks = new Lock[size];
+        initRest(size);
+    }
 
+    private void initRest(int size) {
         for (int i = 0; i < size; i++) {
             locks[i] = new Lock();
         }
@@ -822,6 +829,10 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
     public boolean containsKey(final Object key) {
         final int hash = getHash(key);
         final Lock lock = locks[hash];
+        return containsKeyRest(lock, hash, key);
+    }
+
+    private boolean containsKeyRest(final Lock lock, final int hash, final Object key) {
         synchronized (lock) {
             arena.enter(lock);
             try {
@@ -901,6 +912,10 @@ public final class StaticBucketMap<K, V> extends AbstractIterableMap<K, V> {
     public V get(final Object key) {
         final int hash = getHash(key);
         final Lock lock = locks[hash];
+        return getRest(lock, hash, key);
+    }
+
+    private V getRest(final Lock lock, final int hash, final Object key) {
         synchronized (lock) {
             arena.enter(lock);
             try {

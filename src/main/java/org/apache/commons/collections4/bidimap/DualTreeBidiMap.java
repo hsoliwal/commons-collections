@@ -152,6 +152,10 @@ public class DualTreeBidiMap<K, V> extends AbstractDualBidiMap<K, V>
                         "Cannot use setValue() when the object being set is already in the map");
             }
             final V oldValue = parent.put(last.getKey(), value);
+            return setValueRest(value, oldValue);
+        }
+
+        private V setValueRest(final V value, final V oldValue) {
             // Map.Entry specifies that the behavior is undefined when the backing map
             // has been modified (as we did with the put), so we also set the value
             last.setValue(value);
@@ -377,6 +381,10 @@ public class DualTreeBidiMap<K, V> extends AbstractDualBidiMap<K, V>
         }
         final Iterator<K> it = sm.tailMap(key).keySet().iterator();
         it.next();
+        return nextKeyRest(it);
+    }
+
+    private K nextKeyRest(final Iterator<K> it) {
         if (it.hasNext()) {
             return it.next();
         }
