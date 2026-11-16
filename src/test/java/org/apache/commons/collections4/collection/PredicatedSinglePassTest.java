@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 /** Contract tests for single-pass predicate validation before delegate mutation. */
-class M3PredicatedSinglePassTest {
+class PredicatedSinglePassTest {
 
     @Test
     void doesNotReopenOneShotInputAndRetainsDuplicateOccurrences() {

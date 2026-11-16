@@ -25,7 +25,7 @@ import java.util.Random;
 import org.junit.jupiter.api.Test;
 
 /** Regression coverage for primitive counting and detached, ordered index exports. */
-class M3ArrayCountingBloomFilterScanTest {
+class ArrayCountingBloomFilterScanTest {
 
     private static CellExtractor cell(final int index, final int count) {
         return consumer -> consumer.test(index, count);

@@ -3,7 +3,7 @@ name: Commons Collections source-array superset (Java 8 API / JDK 21 tests)
 on:
   pull_request:
     paths:
-      - '.github/workflows/m3-commons-array-superset-20261113.yml'
+      - '.github/workflows/commons-array-superset-20261113.yml'
       - 'src/main/java/org/apache/commons/collections4/bloomfilter/**'
       - 'src/main/java/org/apache/commons/collections4/ArrayStack.java'
       - 'src/main/java/org/apache/commons/collections4/bag/AbstractMapBag.java'
@@ -27,7 +27,7 @@ on:
       - 'src/test/java/org/apache/commons/collections4/list/SetUniqueListBulkRemovalTest.java'
       - 'src/test/java/org/apache/commons/collections4/map/StaticBucketArray*.java'
       - 'src/test/java/org/apache/commons/collections4/map/AbstractHashedMapArrayHotPathTest.java'
-      - 'src/test/java/org/apache/commons/collections4/iterators/M3ZippingIteratorIndexedRingTest.java'
+      - 'src/test/java/org/apache/commons/collections4/iterators/ZippingIteratorIndexedRingTest.java'
       - 'src/test/java/org/apache/commons/collections4/queue/CircularFifoQueueFullOverwriteTest.java'
       - 'src/test/java/org/apache/commons/collections4/queue/CircularFifoQueueBulkArrayTest.java'
   workflow_dispatch:
@@ -53,7 +53,7 @@ jobs:
           mvn -B -ntp -DskipTests compile
       - name: Require all native fork array-owner JUnit classes
         run: |
-          mvn -B -ntp -Dmaven.compiler.testRelease=21 -Dtest=TreeListBulkCapacityTest,TreeListBulkRollbackTest,TreeBidiMapArrayStorageTest,TreeBidiMapHashPublicationTest,TreeListThreadedIndexLookupTest,TreeListTypedArrayTest,CircularFifoQueueFullOverwriteTest,CircularFifoQueueContainsHotPathTest,CircularFifoQueueRemoveHotPathTest,ArrayCountingBloomFilterMaskTest,ArrayCountingBloomFilterMaskExportTest,BitmapHotPathTest,MapBagSpanArrayExportTest,MapMultiSetSpanArrayExportTest,ArrayListValuedHashMapEntryCursorTest,ArrayStackDirectSearchTest,StaticBucketArrayTest,AbstractHashedMapArrayHotPathTest,SetUniqueListBulkRemovalTest,CircularFifoQueueBulkArrayTest,M3ZippingIteratorIndexedRingTest,ZippingIteratorArrayStorageTest test
+          mvn -B -ntp -Dmaven.compiler.testRelease=21 -Dtest=TreeListBulkCapacityTest,TreeListBulkRollbackTest,TreeBidiMapArrayStorageTest,TreeBidiMapHashPublicationTest,TreeListThreadedIndexLookupTest,TreeListTypedArrayTest,CircularFifoQueueFullOverwriteTest,CircularFifoQueueContainsHotPathTest,CircularFifoQueueRemoveHotPathTest,ArrayCountingBloomFilterMaskTest,ArrayCountingBloomFilterMaskExportTest,BitmapHotPathTest,MapBagSpanArrayExportTest,MapMultiSetSpanArrayExportTest,ArrayListValuedHashMapEntryCursorTest,ArrayStackDirectSearchTest,StaticBucketArrayTest,AbstractHashedMapArrayHotPathTest,SetUniqueListBulkRemovalTest,CircularFifoQueueBulkArrayTest,ZippingIteratorIndexedRingTest,ZippingIteratorArrayStorageTest test
       - name: Full original Commons Maven qualification
         run: mvn -B -ntp -Dmaven.compiler.testRelease=21 verify
       - name: Provider source and API metadata validation

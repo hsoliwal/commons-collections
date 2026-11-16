@@ -32,22 +32,21 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.TreeSet;
 
+import org.apache.commons.collections4.ArrayStorageOracle;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import org.apache.commons.collections4.M3ArrayStorageOracle;
-
 /** Original-source checks for direct ordinal payload storage without retained map entries. */
 class PermutationIteratorArrayStorageTest {
     @TempDir
     static Path work;
-    private static M3ArrayStorageOracle oracle;
+    private static ArrayStorageOracle oracle;
 
     @BeforeAll
     static void originalSource() throws Exception {
-        oracle = new M3ArrayStorageOracle(work);
+        oracle = new ArrayStorageOracle(work);
         assertNotSame(PermutationIterator.class, oracle.originalClass("iterators.PermutationIterator"));
     }
 

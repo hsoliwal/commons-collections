@@ -26,10 +26,10 @@ import java.util.Random;
 import java.util.function.Function;
 
 /** Independent before/after class-loader oracle for the intrinsic array lowering. */
-public final class M3TreeListArrayStorageProof {
+public final class TreeListArrayStorageProof {
     private static long observations;
 
-    private M3TreeListArrayStorageProof() {
+    private TreeListArrayStorageProof() {
     }
 
     private static void require(final boolean condition, final String message) {
@@ -287,6 +287,6 @@ public final class M3TreeListArrayStorageProof {
             failedBulkBuild(fresh(original), fresh(generated));
             boundedBulkReuse(fresh(original), fresh(generated));
         }
-        System.out.println("M3_TREE_LIST_ORIGINAL_DIFFERENTIAL_PASS seeds=12 operations=72000 observations=" + observations);
+        System.out.println("TREE_LIST_ORIGINAL_DIFFERENTIAL_PASS seeds=12 operations=72000 observations=" + observations);
     }
 }

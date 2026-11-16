@@ -51,7 +51,7 @@ public final class BitmapMergeContract {
                 // HotSpot can omit repeated implicit-exception diagnostics at a hot site.
                 // Compare public messages always; compare nested VM messages in the
                 // additional -XX:-OmitStackTraceInFastThrow diagnostic run.
-                if (cause == failure || Boolean.getBoolean("m3.test.fullCauseMessages")) {
+                if (cause == failure || Boolean.getBoolean("collections4.test.fullCauseMessages")) {
                     result.append(cause.getMessage());
                 }
                 result.append(';');

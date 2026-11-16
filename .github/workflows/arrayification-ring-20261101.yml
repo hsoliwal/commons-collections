@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
-name: M3 Commons indexed-ring differential
+name: Commons indexed-ring differential
 on:
   pull_request:
     paths:
       - 'src/main/java/org/apache/commons/collections4/queue/CircularFifoQueue.java'
-      - 'src/test/java/org/apache/commons/collections4/queue/M3CircularFifoQueueIndexTest.java'
-      - '.github/workflows/m3-arrayification-ring-20261101.yml'
+      - 'src/test/java/org/apache/commons/collections4/queue/CircularFifoQueueIndexTest.java'
+      - '.github/workflows/arrayification-ring-20261101.yml'
   workflow_dispatch:
 permissions:
   contents: read
@@ -26,19 +26,19 @@ jobs:
         run: |
           set -euo pipefail
           printf 'c0aa469f19aad77631e5949221b9eec70fa4da5707ec6c964553c7a46ffb21b1  %s\n' 'src/main/java/org/apache/commons/collections4/queue/CircularFifoQueue.java' | sha256sum -c -
-          printf '9da28e29eb0b3ff45859192c1fb65c2257847a148b84d8710b1d32e5ef916016  %s\n' 'src/test/java/org/apache/commons/collections4/queue/M3CircularFifoQueueIndexTest.java' | sha256sum -c -
+          printf '9da28e29eb0b3ff45859192c1fb65c2257847a148b84d8710b1d32e5ef916016  %s\n' 'src/test/java/org/apache/commons/collections4/queue/CircularFifoQueueIndexTest.java' | sha256sum -c -
       - name: Execute actual scoped Commons JUnit test
         shell: bash
         run: |
           set -euo pipefail
-          mvn -B -ntp -Dtest=M3CircularFifoQueueIndexTest test
+          mvn -B -ntp -Dtest=CircularFifoQueueIndexTest test
       - name: Require real JUnit, no failures or skips
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import xml.etree.ElementTree as ET
-          files=list(Path('target/surefire-reports').glob('TEST-*M3CircularFifoQueueIndexTest*.xml'))
+          files=list(Path('target/surefire-reports').glob('TEST-*CircularFifoQueueIndexTest*.xml'))
           assert files,'NO_REAL_JUNIT_REPORT'
           a=[0,0,0,0]
           for f in files:
@@ -51,6 +51,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: m3-commons-array-ring
+          name: commons-array-ring
           if-no-files-found: warn
           path: target/surefire-reports/

@@ -32,22 +32,21 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.TreeSet;
 
+import org.apache.commons.collections4.ArrayStorageOracle;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import org.apache.commons.collections4.M3ArrayStorageOracle;
-
 /** Array-storage checks, retaining the frozen oracle to document upstream contract repairs. */
 class IteratorChainArrayStorageTest {
     @TempDir
     static Path work;
-    private static M3ArrayStorageOracle oracle;
+    private static ArrayStorageOracle oracle;
 
     @BeforeAll
     static void originalSource() throws Exception {
-        oracle = new M3ArrayStorageOracle(work);
+        oracle = new ArrayStorageOracle(work);
         assertNotSame(IteratorChain.class, oracle.originalClass("iterators.IteratorChain"));
     }
 
@@ -57,11 +56,11 @@ class IteratorChainArrayStorageTest {
     }
 
     private static void add(final Iterator<?> chain, final Iterator<?> child) throws Exception {
-        M3ArrayStorageOracle.invoke(chain, "addIterator", new Class<?>[] {Iterator.class}, child);
+        ArrayStorageOracle.invoke(chain, "addIterator", new Class<?>[] {Iterator.class}, child);
     }
 
     private static int size(final Iterator<?> chain) throws Exception {
-        return (Integer) M3ArrayStorageOracle.invoke(chain, "size", new Class<?>[0]);
+        return (Integer) ArrayStorageOracle.invoke(chain, "size", new Class<?>[0]);
     }
 
     private static List<Object> drain(final Iterator<?> chain) {
