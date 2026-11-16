@@ -19,12 +19,15 @@ package org.apache.commons.collections4;
 
 import java.util.AbstractList;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 import org.apache.commons.collections4.functors.DefaultEquator;
 import org.apache.commons.collections4.list.FixedSizeList;
@@ -138,6 +141,34 @@ public class ListUtils {
         }
     }
 
+    /** The class of the lists that {@link Arrays#asList(Object...)} returns. */
+    private static final Class<?> ARRAYS_AS_LIST = Arrays.asList().getClass();
+
+    /** The fewest elements to test for which a hash set of the member list is built: below it the scans cost less than building the set. */
+    private static final int HASH_MIN_ELEMENTS = 128;
+
+    /** The smallest member list for which a hash set is built: below it a linear equals scan is as fast as a hash probe. */
+    private static final int HASH_MIN_MEMBERS = 32;
+
+    /** The fewest element-times-member comparisons the linear scans would make for which a hash set is built. */
+    private static final long HASH_MIN_SCANNED = 1L << 15;
+
+    /**
+     * Whether a class keeps {@code hashCode} consistent with {@code equals} as far as its declarations show: it does not
+     * when it overrides {@code equals} and inherits the identity hash code of {@link Object}.
+     */
+    private static final ClassValue<Boolean> HASH_FOLLOWS_EQUALS = new ClassValue<Boolean>() {
+        @Override
+        protected Boolean computeValue(final Class<?> type) {
+            try {
+                return type.getMethod("equals", Object.class).getDeclaringClass() == Object.class
+                        || type.getMethod("hashCode").getDeclaringClass() != Object.class;
+            } catch (final ReflectiveOperationException | RuntimeException e) {
+                return Boolean.FALSE;
+            }
+        }
+    };
+
     /**
      * Returns either the passed in list, or if the list is {@code null}, the value of {@code defaultList}.
      *
@@ -234,6 +265,38 @@ public class ListUtils {
     }
 
     /**
+     * Tests whether probing a hash set of {@code members} is cheaper than scanning it for every element of {@code collection}.
+     *
+     * @param collection The elements to test.
+     * @param members    The membership collection.
+     * @return Whether {@code members} is a plain linear-scan list and both sides are large enough for the set to pay for itself.
+     */
+    private static boolean hashPays(final Collection<?> collection, final Collection<?> members) {
+        if (!isLinearScanList(members) || members.size() < HASH_MIN_MEMBERS) {
+            return false;
+        }
+        final int elements = collection.size();
+        return elements >= HASH_MIN_ELEMENTS && (long) elements * members.size() >= HASH_MIN_SCANNED;
+    }
+
+    /**
+     * Builds the hash set that stands in for linear scans of {@code members}.
+     *
+     * @param members The member list.
+     * @return The set, or {@code null} when a member's class does not keep {@code hashCode} consistent with {@code equals}.
+     */
+    private static Set<Object> hashedMembers(final Collection<?> members) {
+        final Set<Object> set = new HashSet<>(Math.max(2 * members.size(), 16));
+        for (final Object member : members) {
+            if (member != null && !HASH_FOLLOWS_EQUALS.get(member.getClass())) {
+                return null;
+            }
+            set.add(member);
+        }
+        return set;
+    }
+
+    /**
      * Finds the first index in the given List which matches the given predicate.
      * <p>
      * If the input List or predicate is null, or no element of the List matches the predicate, -1 is returned.
@@ -322,6 +385,17 @@ public class ListUtils {
             }
         }
         return !(it1.hasNext() || it2.hasNext());
+    }
+
+    /**
+     * Tests whether {@code contains} of a collection is the linear equals scan of a plain {@code java.util} list.
+     *
+     * @param collection The collection.
+     * @return Whether the collection is exactly an {@link ArrayList}, a {@link LinkedList} or an {@link Arrays#asList(Object...)} list.
+     */
+    private static boolean isLinearScanList(final Collection<?> collection) {
+        final Class<?> type = collection.getClass();
+        return type == ArrayList.class || type == LinkedList.class || type == ARRAYS_AS_LIST;
     }
 
     /**
@@ -507,6 +581,10 @@ public class ListUtils {
      * it's added to the returned list. As a consequence, it is advised to use a collection type for {@code remove} that provides a fast (for example O(1))
      * implementation of {@link Collection#contains(Object)}.
      * </p>
+     * <p>
+     * A large {@link ArrayList}, {@link LinkedList} or {@link Arrays#asList(Object...)} list as {@code remove} is probed through a {@link HashSet} of it when
+     * {@code collection} is large as well, which gives the same result for elements that honor the {@code equals} and {@code hashCode} contract.
+     * </p>
      *
      * @param <E>        the element type.
      * @param collection The collection from which items are removed (in the returned collection).
@@ -519,6 +597,10 @@ public class ListUtils {
         Objects.requireNonNull(collection, "collection");
         Objects.requireNonNull(remove, "remove");
         final List<E> list = new ArrayList<>();
+        final Set<Object> hashed = hashPays(collection, remove) ? hashedMembers(remove) : null;
+        if (hashed != null) {
+            return selectByHash(collection, remove, hashed, false, list);
+        }
         for (final E obj : collection) {
             if (!remove.contains(obj)) {
                 list.add(obj);
@@ -536,6 +618,10 @@ public class ListUtils {
      * added to the returned list. As a consequence, it is advised to use a collection type for {@code retain} that provides a fast (for example O(1))
      * implementation of {@link Collection#contains(Object)}.
      * </p>
+     * <p>
+     * A large {@link ArrayList}, {@link LinkedList} or {@link Arrays#asList(Object...)} list as {@code retain} is probed through a {@link HashSet} of it when
+     * {@code collection} is large as well, which gives the same result for elements that honor the {@code equals} and {@code hashCode} contract.
+     * </p>
      *
      * @param <E>        the element type.
      * @param collection The collection whose contents are the target of the #retailAll operation.
@@ -546,6 +632,10 @@ public class ListUtils {
      */
     public static <E> List<E> retainAll(final Collection<E> collection, final Collection<?> retain) {
         final List<E> list = new ArrayList<>(Math.min(collection.size(), retain.size()));
+        final Set<Object> hashed = hashPays(collection, retain) ? hashedMembers(retain) : null;
+        if (hashed != null) {
+            return selectByHash(collection, retain, hashed, true, list);
+        }
         for (final E obj : collection) {
             if (retain.contains(obj)) {
                 list.add(obj);
@@ -570,6 +660,30 @@ public class ListUtils {
      */
     public static <E> List<E> select(final Collection<? extends E> inputCollection, final Predicate<? super E> predicate) {
         return CollectionUtils.select(inputCollection, predicate, new ArrayList<>(inputCollection.size()));
+    }
+
+    /**
+     * Adds the elements of {@code collection} whose membership in {@code members} equals {@code keep} to {@code list}, in iteration order, probing a hash
+     * set of {@code members} in place of its linear {@code contains} scan. An element whose class overrides {@code equals} without {@code hashCode} keeps the
+     * scan, so the answers are those of {@code members.contains(Object)} for every element that honors the {@code equals} and {@code hashCode} contract.
+     *
+     * @param <E>        The element type.
+     * @param collection The elements to select from.
+     * @param members    The membership list.
+     * @param hashed     The hash set of {@code members}.
+     * @param keep       {@code true} to select the members, {@code false} to select the others.
+     * @param list       The list to add to.
+     * @return {@code list}.
+     */
+    private static <E> List<E> selectByHash(final Collection<E> collection, final Collection<?> members, final Set<Object> hashed, final boolean keep,
+            final List<E> list) {
+        for (final E obj : collection) {
+            final boolean member = obj == null || HASH_FOLLOWS_EQUALS.get(obj.getClass()) ? hashed.contains(obj) : members.contains(obj);
+            if (member == keep) {
+                list.add(obj);
+            }
+        }
+        return list;
     }
 
     /**
