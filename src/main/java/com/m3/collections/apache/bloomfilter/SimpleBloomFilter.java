@@ -17,6 +17,7 @@
 // Modified 2026-11-13 by Hitesh Soliwal and Synexia contributors: direct array/bitmap hot paths.
 // Modified 2026-11-15 by Hitesh Soliwal and contributors: bounded array snapshots.
 // Modified 2026 by Synexia contributors: exact-peer word-level index operations.
+// Modified 2026 by Synexia contributors: read-only word cursor for sorted peer merge.
 package com.m3.collections.apache.bloomfilter;
 
 import java.util.Arrays;
@@ -108,6 +109,11 @@ public final class SimpleBloomFilter implements BloomFilter<SimpleBloomFilter> {
             }
         }
         return result;
+    }
+
+    /** Internal read-only word cursor; never exposes the mutable bitmap. */
+    long wordAt(final int index) {
+        return bitMap[index];
     }
 
     @Override

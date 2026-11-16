@@ -16,6 +16,7 @@
  */
 // Modified 2026 by Hitesh Soliwal and contributors: sparse lifecycle array hot paths.
 // Modified 2026 by Synexia contributors: sorted-lane bulk union without per-key tree updates.
+// Modified 2026 by Synexia contributors: array-backed dense-peer sorted merge and matching.
 package com.m3.collections.apache.bloomfilter;
 
 import java.util.Arrays;
@@ -271,6 +272,83 @@ public final class SparseBloomFilter implements BloomFilter<SparseBloomFilter> {
             root = (int) (rebuild(first, size) >>> 32);
         }
 
+        /**
+         * Scan exact dense peers by primitive word directly, then splice missing
+         * keys into the owner-held sorted successor lane. No mutable bitmaps,
+         * retained scratch arrays, node objects or callback dispatch escape.
+         */
+        private void addAll(final SimpleBloomFilter other) {
+            final int count = other.cardinality();
+            final int words = BitMaps.numberOfBitMaps(other.getShape());
+            if (count < 32 || (long) words > (long) count * 2L
+                    || (size != 0 && (long) count * (height(root) + 1) < (long) size + count)) {
+                other.processIndices(value -> {
+                    add(value);
+                    return true;
+                });
+                return;
+            }
+            int current = first;
+            int missing = 0;
+            for (int wordIndex = 0; wordIndex < words; wordIndex++) {
+                long word = other.wordAt(wordIndex);
+                while (word != 0L) {
+                    final int key = (wordIndex << 6) + Long.numberOfTrailingZeros(word);
+                    while (current != NONE && keys[current] < key) {
+                        current = next[current];
+                    }
+                    if (current == NONE || keys[current] != key) {
+                        missing++;
+                    }
+                    word &= word - 1;
+                }
+            }
+            if (missing == 0) {
+                return;
+            }
+            reserve((long) size + missing);
+            current = first;
+            int previous = NONE;
+            for (int wordIndex = 0; wordIndex < words; wordIndex++) {
+                long word = other.wordAt(wordIndex);
+                while (word != 0L) {
+                    final int key = (wordIndex << 6) + Long.numberOfTrailingZeros(word);
+                    while (current != NONE && keys[current] < key) {
+                        previous = current;
+                        current = next[current];
+                    }
+                    if (current != NONE && keys[current] == key) {
+                        previous = current;
+                        current = next[current];
+                    } else {
+                        previous = newLeaf(key, previous, current);
+                    }
+                    word &= word - 1;
+                }
+            }
+            root = (int) (rebuild(first, size) >>> 32);
+        }
+
+        /** Ordered bitmap words use one monotone successor scan. */
+        private boolean containsAll(final SimpleBloomFilter other) {
+            int current = first;
+            final int words = BitMaps.numberOfBitMaps(other.getShape());
+            for (int wordIndex = 0; wordIndex < words; wordIndex++) {
+                long word = other.wordAt(wordIndex);
+                while (word != 0L) {
+                    final int key = (wordIndex << 6) + Long.numberOfTrailingZeros(word);
+                    while (current != NONE && keys[current] < key) {
+                        current = next[current];
+                    }
+                    if (current == NONE || keys[current] != key) {
+                        return false;
+                    }
+                    word &= word - 1;
+                }
+            }
+            return true;
+        }
+
         /** Pack the balanced root and first unconsumed successor into one primitive. */
         private long rebuild(final int cursor, final int count) {
             if (count == 0) {
@@ -460,6 +538,9 @@ public final class SparseBloomFilter implements BloomFilter<SparseBloomFilter> {
 
     @Override
     public boolean contains(final BitMapExtractor bitMapExtractor) {
+        if (bitMapExtractor instanceof SimpleBloomFilter) {
+            return contains((IndexExtractor) bitMapExtractor);
+        }
         return contains(IndexExtractor.fromBitMapExtractor(bitMapExtractor));
     }
 
@@ -467,6 +548,15 @@ public final class SparseBloomFilter implements BloomFilter<SparseBloomFilter> {
     public boolean contains(final IndexExtractor indexExtractor) {
         if (indexExtractor instanceof SparseBloomFilter) {
             return indices.containsAll(((SparseBloomFilter) indexExtractor).indices);
+        }
+        if (indexExtractor instanceof SimpleBloomFilter) {
+            final SimpleBloomFilter other = (SimpleBloomFilter) indexExtractor;
+            final int count = other.cardinality();
+            if (count >= 32 && indices.size > 0
+                    && (long) BitMaps.numberOfBitMaps(other.getShape()) <= (long) count * 2L
+                    && (long) count * (indices.height(indices.root) + 1) >= (long) indices.size + count) {
+                return indices.containsAll(other);
+            }
         }
         // Preserve arbitrary-producer callbacks, return values and exception behavior.
         return indexExtractor.processIndices(indices::contains);
@@ -495,13 +585,17 @@ public final class SparseBloomFilter implements BloomFilter<SparseBloomFilter> {
     @Override
     public boolean merge(final BitMapExtractor bitMapExtractor) {
         Objects.requireNonNull(bitMapExtractor, "bitMapExtractor");
-        return this.merge(IndexExtractor.fromBitMapExtractor(bitMapExtractor));
+        return bitMapExtractor instanceof SimpleBloomFilter
+                ? merge((IndexExtractor) bitMapExtractor)
+                : merge(IndexExtractor.fromBitMapExtractor(bitMapExtractor));
     }
 
     @Override
     public boolean merge(final BloomFilter<?> other) {
         Objects.requireNonNull(other, "other");
-        final IndexExtractor indexExtractor = (other.characteristics() & SPARSE) != 0 ? (IndexExtractor) other : IndexExtractor.fromBitMapExtractor(other);
+        final IndexExtractor indexExtractor = (other.characteristics() & SPARSE) != 0
+                || other instanceof SimpleBloomFilter
+                ? (IndexExtractor) other : IndexExtractor.fromBitMapExtractor(other);
         merge(indexExtractor);
         return true;
     }
@@ -518,6 +612,8 @@ public final class SparseBloomFilter implements BloomFilter<SparseBloomFilter> {
         Objects.requireNonNull(indexExtractor, "indexExtractor");
         if (indexExtractor instanceof SparseBloomFilter) {
             indices.addAll(((SparseBloomFilter) indexExtractor).indices);
+        } else if (indexExtractor instanceof SimpleBloomFilter) {
+            indices.addAll((SimpleBloomFilter) indexExtractor);
         } else {
             indexExtractor.processIndices(this::add);
         }
