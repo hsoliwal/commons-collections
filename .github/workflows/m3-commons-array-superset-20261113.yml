@@ -4,32 +4,32 @@ on:
   pull_request:
     paths:
       - '.github/workflows/m3-commons-array-superset-20261113.yml'
-      - 'src/main/java/com/m3/collections/apache/bloomfilter/**'
-      - 'src/main/java/com/m3/collections/apache/ArrayStack.java'
-      - 'src/main/java/com/m3/collections/apache/bag/AbstractMapBag.java'
-      - 'src/main/java/com/m3/collections/apache/multimap/AbstractMultiValuedMap.java'
-      - 'src/main/java/com/m3/collections/apache/multiset/AbstractMapMultiSet.java'
-      - 'src/main/java/com/m3/collections/apache/list/TreeList.java'
-      - 'src/main/java/com/m3/collections/apache/bidimap/TreeBidiMap.java'
-      - 'src/main/java/com/m3/collections/apache/list/SetUniqueList.java'
-      - 'src/main/java/com/m3/collections/apache/map/StaticBucketMap.java'
-      - 'src/main/java/com/m3/collections/apache/map/AbstractHashedMap.java'
-      - 'src/main/java/com/m3/collections/apache/queue/CircularFifoQueue.java'
-      - 'src/test/java/com/m3/collections/apache/bloomfilter/**'
-      - 'src/test/java/com/m3/collections/apache/ArrayStackDirectSearchTest.java'
-      - 'src/test/java/com/m3/collections/apache/bag/MapBagSpanArrayExportTest.java'
-      - 'src/test/java/com/m3/collections/apache/multimap/ArrayListValuedHashMapEntryCursorTest.java'
-      - 'src/test/java/com/m3/collections/apache/multiset/MapMultiSetSpanArrayExportTest.java'
-      - 'src/test/java/com/m3/collections/apache/list/TreeListThreadedIndexLookupTest.java'
-      - 'src/test/java/com/m3/collections/apache/list/TreeListBulk*.java'
-      - 'src/test/java/com/m3/collections/apache/bidimap/TreeBidiMap*.java'
-      - 'src/test/java/com/m3/collections/apache/list/TreeListTypedArray*.java'
-      - 'src/test/java/com/m3/collections/apache/list/SetUniqueListBulkRemovalTest.java'
-      - 'src/test/java/com/m3/collections/apache/map/StaticBucketArray*.java'
-      - 'src/test/java/com/m3/collections/apache/map/AbstractHashedMapArrayHotPathTest.java'
-      - 'src/test/java/com/m3/collections/apache/iterators/M3ZippingIteratorIndexedRingTest.java'
-      - 'src/test/java/com/m3/collections/apache/queue/CircularFifoQueueFullOverwriteTest.java'
-      - 'src/test/java/com/m3/collections/apache/queue/CircularFifoQueueBulkArrayTest.java'
+      - 'src/main/java/org/apache/commons/collections4/bloomfilter/**'
+      - 'src/main/java/org/apache/commons/collections4/ArrayStack.java'
+      - 'src/main/java/org/apache/commons/collections4/bag/AbstractMapBag.java'
+      - 'src/main/java/org/apache/commons/collections4/multimap/AbstractMultiValuedMap.java'
+      - 'src/main/java/org/apache/commons/collections4/multiset/AbstractMapMultiSet.java'
+      - 'src/main/java/org/apache/commons/collections4/list/TreeList.java'
+      - 'src/main/java/org/apache/commons/collections4/bidimap/TreeBidiMap.java'
+      - 'src/main/java/org/apache/commons/collections4/list/SetUniqueList.java'
+      - 'src/main/java/org/apache/commons/collections4/map/StaticBucketMap.java'
+      - 'src/main/java/org/apache/commons/collections4/map/AbstractHashedMap.java'
+      - 'src/main/java/org/apache/commons/collections4/queue/CircularFifoQueue.java'
+      - 'src/test/java/org/apache/commons/collections4/bloomfilter/**'
+      - 'src/test/java/org/apache/commons/collections4/ArrayStackDirectSearchTest.java'
+      - 'src/test/java/org/apache/commons/collections4/bag/MapBagSpanArrayExportTest.java'
+      - 'src/test/java/org/apache/commons/collections4/multimap/ArrayListValuedHashMapEntryCursorTest.java'
+      - 'src/test/java/org/apache/commons/collections4/multiset/MapMultiSetSpanArrayExportTest.java'
+      - 'src/test/java/org/apache/commons/collections4/list/TreeListThreadedIndexLookupTest.java'
+      - 'src/test/java/org/apache/commons/collections4/list/TreeListBulk*.java'
+      - 'src/test/java/org/apache/commons/collections4/bidimap/TreeBidiMap*.java'
+      - 'src/test/java/org/apache/commons/collections4/list/TreeListTypedArray*.java'
+      - 'src/test/java/org/apache/commons/collections4/list/SetUniqueListBulkRemovalTest.java'
+      - 'src/test/java/org/apache/commons/collections4/map/StaticBucketArray*.java'
+      - 'src/test/java/org/apache/commons/collections4/map/AbstractHashedMapArrayHotPathTest.java'
+      - 'src/test/java/org/apache/commons/collections4/iterators/M3ZippingIteratorIndexedRingTest.java'
+      - 'src/test/java/org/apache/commons/collections4/queue/CircularFifoQueueFullOverwriteTest.java'
+      - 'src/test/java/org/apache/commons/collections4/queue/CircularFifoQueueBulkArrayTest.java'
   workflow_dispatch:
 permissions:
   contents: read
@@ -59,5 +59,5 @@ jobs:
       - name: Provider source and API metadata validation
         run: |
           git diff --check "$(git merge-base HEAD origin/master)" HEAD
-          test -f target/surefire-reports/TEST-com.m3.collections.apache.bloomfilter.ArrayCountingBloomFilterMaskExportTest.xml
-          test -f target/surefire-reports/TEST-com.m3.collections.apache.list.TreeListTypedArrayTest.xml
+          test -f target/surefire-reports/TEST-org.apache.commons.collections4.bloomfilter.ArrayCountingBloomFilterMaskExportTest.xml
+          test -f target/surefire-reports/TEST-org.apache.commons.collections4.list.TreeListTypedArrayTest.xml

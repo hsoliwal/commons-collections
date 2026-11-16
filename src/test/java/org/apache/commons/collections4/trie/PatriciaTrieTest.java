@@ -1,0 +1,800 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.commons.collections4.trie;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.ConcurrentModificationException;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Set;
+import java.util.SortedMap;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
+import org.apache.commons.collections4.Trie;
+import org.apache.commons.collections4.map.AbstractSortedMapTest;
+import org.apache.commons.lang3.StringUtils;
+import org.junit.jupiter.api.Test;
+
+/**
+ * Tests {@link PatriciaTrie}.
+ *
+ * @param <V> The value type.
+ */
+public class PatriciaTrieTest<V> extends AbstractSortedMapTest<String, V> {
+
+    @Override
+    public String getCompatibilityVersion() {
+        return "4";
+    }
+
+    @Override
+    public boolean isAllowNullKey() {
+        return false;
+    }
+
+    @Override
+    public SortedMap<String, V> makeObject() {
+        return new PatriciaTrie<>();
+    }
+
+    @Test
+    void testConcurrentTrieIterationAndSubMapIteration() throws InterruptedException, ExecutionException, TimeoutException {
+        final PatriciaTrie<Integer> trie = new PatriciaTrie<>();
+        // populate with enough entries to make concurrent collisions likely
+        // call subMap with both keys missing to ensure phantom node addition done twice
+        final int subKeyFirst = 1;
+        final int subKeySecond = 4;
+        final String subKeyFirstStr = String.format("key%04d", subKeyFirst);
+        final String subKeySecondStr = String.format("key%04d", subKeySecond);
+        for (int i = 0; i <= 501; i++) {
+            if (i != subKeyFirst && i != subKeySecond) {
+                trie.put(String.format("key%04d", i), i);
+            }
+        }
+
+        final int iterations = 100;
+        final CyclicBarrier barrier = new CyclicBarrier(2);
+
+        final ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            // Thread 1: repeatedly iterate the entire trie
+            final Future<?> iteratorTask = executor.submit(() -> {
+                barrier.await(1, TimeUnit.SECONDS);
+                for (int i = 0; i < iterations && !Thread.currentThread().isInterrupted(); i++) {
+                    int count = 0;
+                    for (final Map.Entry<String, Integer> entry : trie.entrySet()) {
+                        // verify the iterated keys and values are not from the phantom node
+                        assertNotNull(entry.getKey());
+                        assertNotNull(entry.getValue());
+                        count++;
+                    }
+                    assertEquals(500, count, "Iterator skipped or duplicated entries");
+                }
+                return null;
+            });
+
+            // Thread 2: repeatedly create and iterate subMap views
+            // (this triggers ceilingEntry with keys NOT in the trie)
+            final Future<?> subMapTask = executor.submit(() -> {
+                barrier.await(1, TimeUnit.SECONDS);
+                for (int i = 0; i < iterations && !Thread.currentThread().isInterrupted(); i++) {
+                    // Use boundary keys that do NOT exist in the trie
+                    // to force the ceiling/floor walk algorithm
+                    final SortedMap<String, Integer> sub = trie.subMap(subKeyFirstStr, subKeySecondStr);
+                    int count = 0;
+                    for (final Map.Entry<String, Integer> entry : sub.entrySet()) {
+                        // verify the iterated keys and values are not from the phantom node
+                        assertNotNull(entry.getKey());
+                        assertNotNull(entry.getValue());
+                        count++;
+                    }
+                    assertEquals(2, count, "subMap returned wrong number of entries");
+                }
+                return null;
+            });
+
+            // get() unwraps ExecutionException
+            // if either task threw an exception or an assertion Error, (or any Throwable),
+            // then the original exception propagates with its full stacktrace
+            // and TimeoutException surfaces hangs
+            subMapTask.get(10, TimeUnit.SECONDS);
+            iteratorTask.get(10, TimeUnit.SECONDS);
+        } finally {
+            executor.shutdownNow();
+            executor.awaitTermination(5, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
+    public void testControlCharactersRegression() {
+        final String[] keys = {
+            "",
+            "\u0000",
+            "\u0001",
+            "\u0002",
+            "\u001F",
+            "\u007F",
+            "x",
+            "x\u0000",
+            "x\u0001",
+            "x\u0002",
+            "x\u001F",
+            "x\u007F",
+            "x\u0000y",
+            "x\u0001y"
+        };
+
+        // 1. Insertion, Retrieval, containsKey, size compared with HashMap
+        final java.util.Map<String, String> hashMap = new java.util.HashMap<>();
+        final PatriciaTrie<String> trie = new PatriciaTrie<>();
+
+        for (int i = 0; i < keys.length; i++) {
+            final String key = keys[i];
+            final String value = "val_" + i;
+
+            assertFalse(trie.containsKey(key));
+            assertNull(trie.get(key));
+
+            trie.put(key, value);
+            hashMap.put(key, value);
+
+            assertEquals(hashMap.size(), trie.size());
+            assertTrue(trie.containsKey(key));
+            assertEquals(value, trie.get(key));
+        }
+
+        // Verify all elements present and distinct
+        for (int i = 0; i < keys.length; i++) {
+            final String key = keys[i];
+            assertTrue(trie.containsKey(key));
+            assertEquals("val_" + i, trie.get(key));
+        }
+
+        // 2. Iteration order (compared with TreeMap)
+        final java.util.TreeMap<String, String> treeMap = new java.util.TreeMap<>(hashMap);
+        final java.util.List<String> trieKeys = new java.util.ArrayList<>(trie.keySet());
+        final java.util.List<String> expectedKeys = new java.util.ArrayList<>(treeMap.keySet());
+        assertEquals(expectedKeys, trieKeys);
+
+        // 3. prefixMap
+        final String[] prefixes = {"", "x", "x\u0000", "x\u0001", "x\u0002", "x\u001F", "x\u007F", "y"};
+        for (final String prefix : prefixes) {
+            final java.util.SortedMap<String, String> prefixMap = trie.prefixMap(prefix);
+            final java.util.TreeMap<String, String> expectedPrefixMap = new java.util.TreeMap<>();
+            for (final java.util.Map.Entry<String, String> entry : treeMap.entrySet()) {
+                if (entry.getKey().startsWith(prefix)) {
+                    expectedPrefixMap.put(entry.getKey(), entry.getValue());
+                }
+            }
+            assertEquals(expectedPrefixMap.size(), prefixMap.size());
+            assertEquals(expectedPrefixMap, new java.util.TreeMap<>(prefixMap));
+        }
+
+        // 4. headMap, tailMap, subMap (compared with TreeMap)
+        for (final String k1 : keys) {
+            assertEquals(new java.util.TreeMap<>(treeMap.headMap(k1)), new java.util.TreeMap<>(trie.headMap(k1)));
+            assertEquals(new java.util.TreeMap<>(treeMap.tailMap(k1)), new java.util.TreeMap<>(trie.tailMap(k1)));
+            for (final String k2 : keys) {
+                if (k1.compareTo(k2) <= 0) {
+                    assertEquals(new java.util.TreeMap<>(treeMap.subMap(k1, k2)), new java.util.TreeMap<>(trie.subMap(k1, k2)));
+                } else {
+                    assertThrows(IllegalArgumentException.class, () -> trie.subMap(k1, k2));
+                }
+            }
+        }
+
+        // 5. Remove (compared with HashMap)
+        for (int i = 0; i < keys.length; i++) {
+            final String key = keys[i];
+            final String value = "val_" + i;
+
+            assertTrue(trie.containsKey(key));
+            assertEquals(value, trie.remove(key));
+            assertFalse(trie.containsKey(key));
+            assertNull(trie.get(key));
+
+            hashMap.remove(key);
+            assertEquals(hashMap.size(), trie.size());
+        }
+
+        assertTrue(trie.isEmpty());
+        assertEquals(0, trie.size());
+    }
+
+    @Test
+    void testHeadMap() {
+        final PatriciaTrie<String> trie = new PatriciaTrie<>();
+        trie.put("ga", "ga");
+        trie.put("gb", "gb");
+        trie.put("gc", "gc");
+        trie.put("gd", "gd");
+        trie.put("ge", "ge");
+
+        // headMap should be entire trie
+        SortedMap<String, String> headMap = trie.headMap("z");
+        assertEquals(5, headMap.size());
+        assertEquals("ga", headMap.get("ga"));
+        assertEquals("gb", headMap.get("gb"));
+        assertEquals("gc", headMap.get("gc"));
+        assertEquals("gd", headMap.get("gd"));
+        assertEquals("ge", headMap.get("ge"));
+
+        // headMap should be empty
+        headMap = trie.headMap("a");
+        assertEquals(0, headMap.size());
+
+        // headMap() is not inclusive of the key
+        // headMap should be 4 entries only - "ge" excluded
+        headMap = trie.headMap("ge");
+        assertEquals(4, headMap.size());
+        assertEquals("ga", headMap.get("ga"));
+        assertEquals("gb", headMap.get("gb"));
+        assertEquals("gc", headMap.get("gc"));
+        assertEquals("gd", headMap.get("gd"));
+        assertNull(headMap.get("ge"));
+
+        // headMap should be 5 entries
+        headMap = trie.headMap("gf");
+        assertEquals(5, headMap.size());
+        assertEquals("ga", headMap.get("ga"));
+        assertEquals("gb", headMap.get("gb"));
+        assertEquals("gc", headMap.get("gc"));
+        assertEquals("gd", headMap.get("gd"));
+        assertEquals("ge", headMap.get("ge"));
+
+        // headMap should be 1 entry - "ga" only
+        headMap = trie.headMap("gb");
+        assertEquals(1, headMap.size());
+        assertEquals("ga", headMap.get("ga"));
+        assertNull(headMap.get("gb"));
+        assertNull(headMap.get("gc"));
+        assertNull(headMap.get("gd"));
+        assertNull(headMap.get("ge"));
+    }
+
+    @Test
+    void testNullTerminatedKey1() {
+        final PatriciaTrie<Integer> trie = new PatriciaTrie<>();
+        trie.put("x", 0);
+        trie.put("x\u0000", 1);
+        assertTrue(trie.containsKey("x"));
+        assertTrue(trie.containsKey("x\u0000"));
+        assertEquals(2, trie.size());
+        assertEquals(0, trie.get("x"));
+        assertEquals(1, trie.get("x\u0000"));
+    }
+
+    @Test
+    void testNullTerminatedKey2() {
+        final PatriciaTrie<Integer> trie = new PatriciaTrie<>();
+        trie.put("x\u0000", 1);
+        trie.put("x", 0);
+        assertTrue(trie.containsKey("x"));
+        assertTrue(trie.containsKey("x\u0000"));
+        assertEquals(2, trie.size());
+        assertEquals(0, trie.get("x"));
+        assertEquals(1, trie.get("x\u0000"));
+    }
+
+    @Test
+    void testPrefixMap() {
+        final PatriciaTrie<String> trie = new PatriciaTrie<>();
+
+        final String[] keys = {
+            StringUtils.EMPTY,
+            "Albert", "Xavier", "XyZ", "Anna", "Alien", "Alberto",
+            "Alberts", "Allie", "Alliese", "Alabama", "Banane",
+            "Blabla", "Amber", "Ammun", "Akka", "Akko", "Albertoo",
+            "Amma"
+        };
+
+        for (final String key : keys) {
+            trie.put(key, key);
+        }
+
+        SortedMap<String, String> map;
+        Iterator<String> iterator;
+        Iterator<Map.Entry<String, String>> entryIterator;
+        Map.Entry<String, String> entry;
+
+        map = trie.prefixMap("Al");
+        assertEquals(8, map.size());
+        assertEquals("Alabama", map.firstKey());
+        assertEquals("Alliese", map.lastKey());
+        assertEquals("Albertoo", map.get("Albertoo"));
+        assertNotNull(trie.get("Xavier"));
+        assertNull(map.get("Xavier"));
+        assertNull(trie.get("Alice"));
+        assertNull(map.get("Alice"));
+        iterator = map.values().iterator();
+        assertEquals("Alabama", iterator.next());
+        assertEquals("Albert", iterator.next());
+        assertEquals("Alberto", iterator.next());
+        assertEquals("Albertoo", iterator.next());
+        assertEquals("Alberts", iterator.next());
+        assertEquals("Alien", iterator.next());
+        assertEquals("Allie", iterator.next());
+        assertEquals("Alliese", iterator.next());
+        assertFalse(iterator.hasNext());
+
+        map = trie.prefixMap("Albert");
+        iterator = map.keySet().iterator();
+        assertEquals("Albert", iterator.next());
+        assertEquals("Alberto", iterator.next());
+        assertEquals("Albertoo", iterator.next());
+        assertEquals("Alberts", iterator.next());
+        assertFalse(iterator.hasNext());
+        assertEquals(4, map.size());
+        assertEquals("Albert", map.firstKey());
+        assertEquals("Alberts", map.lastKey());
+        assertNull(trie.get("Albertz"));
+        map.put("Albertz", "Albertz");
+        assertEquals("Albertz", trie.get("Albertz"));
+        assertEquals(5, map.size());
+        assertEquals("Albertz", map.lastKey());
+        iterator = map.keySet().iterator();
+        assertEquals("Albert", iterator.next());
+        assertEquals("Alberto", iterator.next());
+        assertEquals("Albertoo", iterator.next());
+        assertEquals("Alberts", iterator.next());
+        assertEquals("Albertz", iterator.next());
+        assertFalse(iterator.hasNext());
+        assertEquals("Albertz", map.remove("Albertz"));
+
+        map = trie.prefixMap("Alberto");
+        assertEquals(2, map.size());
+        assertEquals("Alberto", map.firstKey());
+        assertEquals("Albertoo", map.lastKey());
+        entryIterator = map.entrySet().iterator();
+        entry = entryIterator.next();
+        assertEquals("Alberto", entry.getKey());
+        assertEquals("Alberto", entry.getValue());
+        entry = entryIterator.next();
+        assertEquals("Albertoo", entry.getKey());
+        assertEquals("Albertoo", entry.getValue());
+        assertFalse(entryIterator.hasNext());
+        trie.put("Albertoad", "Albertoad");
+        assertEquals(3, map.size());
+        assertEquals("Alberto", map.firstKey());
+        assertEquals("Albertoo", map.lastKey());
+        entryIterator = map.entrySet().iterator();
+        entry = entryIterator.next();
+        assertEquals("Alberto", entry.getKey());
+        assertEquals("Alberto", entry.getValue());
+        entry = entryIterator.next();
+        assertEquals("Albertoad", entry.getKey());
+        assertEquals("Albertoad", entry.getValue());
+        entry = entryIterator.next();
+        assertEquals("Albertoo", entry.getKey());
+        assertEquals("Albertoo", entry.getValue());
+        assertFalse(entryIterator.hasNext());
+        assertEquals("Albertoo", trie.remove("Albertoo"));
+        assertEquals("Alberto", map.firstKey());
+        assertEquals("Albertoad", map.lastKey());
+        assertEquals(2, map.size());
+        entryIterator = map.entrySet().iterator();
+        entry = entryIterator.next();
+        assertEquals("Alberto", entry.getKey());
+        assertEquals("Alberto", entry.getValue());
+        entry = entryIterator.next();
+        assertEquals("Albertoad", entry.getKey());
+        assertEquals("Albertoad", entry.getValue());
+        assertFalse(entryIterator.hasNext());
+        assertEquals("Albertoad", trie.remove("Albertoad"));
+        trie.put("Albertoo", "Albertoo");
+
+        map = trie.prefixMap("X");
+        assertEquals(2, map.size());
+        assertFalse(map.containsKey("Albert"));
+        assertTrue(map.containsKey("Xavier"));
+        assertFalse(map.containsKey("Xalan"));
+        iterator = map.values().iterator();
+        assertEquals("Xavier", iterator.next());
+        assertEquals("XyZ", iterator.next());
+        assertFalse(iterator.hasNext());
+
+        map = trie.prefixMap("An");
+        assertEquals(1, map.size());
+        assertEquals("Anna", map.firstKey());
+        assertEquals("Anna", map.lastKey());
+        iterator = map.keySet().iterator();
+        assertEquals("Anna", iterator.next());
+        assertFalse(iterator.hasNext());
+
+        map = trie.prefixMap("Ban");
+        assertEquals(1, map.size());
+        assertEquals("Banane", map.firstKey());
+        assertEquals("Banane", map.lastKey());
+        iterator = map.keySet().iterator();
+        assertEquals("Banane", iterator.next());
+        assertFalse(iterator.hasNext());
+
+        map = trie.prefixMap("Am");
+        assertFalse(map.isEmpty());
+        assertEquals(3, map.size());
+        assertEquals("Amber", trie.remove("Amber"));
+        iterator = map.keySet().iterator();
+        assertEquals("Amma", iterator.next());
+        assertEquals("Ammun", iterator.next());
+        assertFalse(iterator.hasNext());
+        iterator = map.keySet().iterator();
+        map.put("Amber", "Amber");
+        assertEquals(3, map.size());
+
+        final Iterator<String> iterator1 = iterator;
+        assertThrows(ConcurrentModificationException.class, () -> iterator1.next());
+
+        assertEquals("Amber", map.firstKey());
+        assertEquals("Ammun", map.lastKey());
+
+        map = trie.prefixMap("Ak\0");
+        assertTrue(map.isEmpty());
+
+        map = trie.prefixMap("Ak");
+        assertEquals(2, map.size());
+        assertEquals("Akka", map.firstKey());
+        assertEquals("Akko", map.lastKey());
+        map.put("Ak", "Ak");
+        assertEquals("Ak", map.firstKey());
+        assertEquals("Akko", map.lastKey());
+        assertEquals(3, map.size());
+        trie.put("Al", "Al");
+        assertEquals(3, map.size());
+        assertEquals("Ak", map.remove("Ak"));
+        assertEquals("Akka", map.firstKey());
+        assertEquals("Akko", map.lastKey());
+        assertEquals(2, map.size());
+        iterator = map.keySet().iterator();
+        assertEquals("Akka", iterator.next());
+        assertEquals("Akko", iterator.next());
+        assertFalse(iterator.hasNext());
+        assertEquals("Al", trie.remove("Al"));
+
+        map = trie.prefixMap("Akka");
+        assertEquals(1, map.size());
+        assertEquals("Akka", map.firstKey());
+        assertEquals("Akka", map.lastKey());
+        iterator = map.keySet().iterator();
+        assertEquals("Akka", iterator.next());
+        assertFalse(iterator.hasNext());
+
+        map = trie.prefixMap("Ab");
+        assertTrue(map.isEmpty());
+        assertEquals(0, map.size());
+
+        final SortedMap<String, String> map1 = map;
+        assertThrows(NoSuchElementException.class, () -> map1.firstKey());
+
+        final SortedMap<String, String> map2 = map;
+        assertThrows(NoSuchElementException.class, () -> map2.lastKey());
+
+        iterator = map.values().iterator();
+        assertFalse(iterator.hasNext());
+
+        map = trie.prefixMap("Albertooo");
+        assertTrue(map.isEmpty());
+        assertEquals(0, map.size());
+
+        final SortedMap<String, String> map3 = map;
+        assertThrows(NoSuchElementException.class, () -> map3.firstKey(),
+                () -> "got a first key: " + map3.firstKey());
+
+        final SortedMap<String, String> map4 = map;
+        assertThrows(NoSuchElementException.class, () -> map4.lastKey(),
+                () -> "got a last key: " + map4.lastKey());
+
+        iterator = map.values().iterator();
+        assertFalse(iterator.hasNext());
+
+        map = trie.prefixMap(StringUtils.EMPTY);
+        assertSame(trie, map); // stricter than necessary, but a good check
+
+        map = trie.prefixMap("\0");
+        assertTrue(map.isEmpty());
+        assertEquals(0, map.size());
+
+        final SortedMap<String, String> map5 = map;
+        assertThrows(NoSuchElementException.class, () -> map5.firstKey(),
+                () -> "got a first key: " + map5.firstKey());
+
+        final SortedMap<String, String> map6 = map;
+        assertThrows(NoSuchElementException.class, () -> map6.lastKey(),
+                () -> "got a last key: " + map6.lastKey());
+
+        iterator = map.values().iterator();
+        assertFalse(iterator.hasNext());
+    }
+
+    @Test
+    void testPrefixMapClear() {
+        final Trie<String, Integer> trie = new PatriciaTrie<>();
+        trie.put("Anna", 1);
+        trie.put("Anael", 2);
+        trie.put("Analu", 3);
+        trie.put("Andreas", 4);
+        trie.put("Andrea", 5);
+        trie.put("Andres", 6);
+        trie.put("Anatole", 7);
+        final SortedMap<String, Integer> prefixMap = trie.prefixMap("And");
+        assertEquals(new HashSet<>(Arrays.asList("Andrea", "Andreas", "Andres")), prefixMap.keySet());
+        assertEquals(Arrays.asList(5, 4, 6), new ArrayList<>(prefixMap.values()));
+
+        prefixMap.clear();
+        assertTrue(prefixMap.isEmpty());
+        assertTrue(prefixMap.isEmpty());
+        assertTrue(prefixMap.isEmpty());
+        assertEquals(new HashSet<>(Arrays.asList("Anael", "Analu", "Anatole", "Anna")), trie.keySet());
+        assertEquals(Arrays.asList(2, 3, 7, 1), new ArrayList<>(trie.values()));
+    }
+
+    @Test
+    void testPrefixMapClearNothing() {
+        final Trie<String, Integer> trie = new PatriciaTrie<>();
+        final SortedMap<String, Integer> prefixMap = trie.prefixMap("And");
+        assertEquals(new HashSet<>(), prefixMap.keySet());
+        assertEquals(new ArrayList<>(0), new ArrayList<>(prefixMap.values()));
+
+        prefixMap.clear();
+        assertTrue(prefixMap.isEmpty());
+        assertTrue(prefixMap.isEmpty());
+        assertTrue(prefixMap.isEmpty());
+        assertEquals(new HashSet<>(), trie.keySet());
+        assertEquals(new ArrayList<>(0), new ArrayList<>(trie.values()));
+    }
+
+    @Test
+    void testPrefixMapClearUsingRemove() {
+        final Trie<String, Integer> trie = new PatriciaTrie<>();
+        trie.put("Anna", 1);
+        trie.put("Anael", 2);
+        trie.put("Analu", 3);
+        trie.put("Andreas", 4);
+        trie.put("Andrea", 5);
+        trie.put("Andres", 6);
+        trie.put("Anatole", 7);
+        final SortedMap<String, Integer> prefixMap = trie.prefixMap("And");
+        assertEquals(new HashSet<>(Arrays.asList("Andrea", "Andreas", "Andres")), prefixMap.keySet());
+        assertEquals(Arrays.asList(5, 4, 6), new ArrayList<>(prefixMap.values()));
+
+        final Set<String> keys = new HashSet<>(prefixMap.keySet());
+        for (final String key : keys) {
+            prefixMap.remove(key);
+        }
+        assertTrue(prefixMap.isEmpty());
+        assertTrue(prefixMap.isEmpty());
+        assertEquals(new HashSet<>(Arrays.asList("Anael", "Analu", "Anatole", "Anna")), trie.keySet());
+        assertEquals(Arrays.asList(2, 3, 7, 1), new ArrayList<>(trie.values()));
+    }
+
+    @Test
+    void testPrefixMapRemoval() {
+        final PatriciaTrie<String> trie = new PatriciaTrie<>();
+
+        final String[] keys = {
+            "Albert", "Xavier", "XyZ", "Anna", "Alien", "Alberto",
+            "Alberts", "Allie", "Alliese", "Alabama", "Banane",
+            "Blabla", "Amber", "Ammun", "Akka", "Akko", "Albertoo",
+            "Amma"
+        };
+
+        for (final String key : keys) {
+            trie.put(key, key);
+        }
+
+        SortedMap<String, String> map = trie.prefixMap("Al");
+        assertEquals(8, map.size());
+        Iterator<String> iter = map.keySet().iterator();
+        assertEquals("Alabama", iter.next());
+        assertEquals("Albert", iter.next());
+        assertEquals("Alberto", iter.next());
+        assertEquals("Albertoo", iter.next());
+        assertEquals("Alberts", iter.next());
+        assertEquals("Alien", iter.next());
+        iter.remove();
+        assertEquals(7, map.size());
+        assertEquals("Allie", iter.next());
+        assertEquals("Alliese", iter.next());
+        assertFalse(iter.hasNext());
+
+        map = trie.prefixMap("Ak");
+        assertEquals(2, map.size());
+        iter = map.keySet().iterator();
+        assertEquals("Akka", iter.next());
+        iter.remove();
+        assertEquals(1, map.size());
+        assertEquals("Akko", iter.next());
+
+        final Iterator<String> iter1 = iter;
+        assertFalse(iter.hasNext(), () -> "shouldn't have next (but was: " + iter1.next() + ")");
+
+        assertFalse(iter.hasNext());
+    }
+
+
+    @Test
+    void testPrefixMapSizes() {
+        // COLLECTIONS-525
+        final PatriciaTrie<String> aTree = new PatriciaTrie<>();
+        aTree.put("点评", "测试");
+        aTree.put("书评", "测试");
+        assertTrue(aTree.prefixMap("点").containsKey("点评"));
+        assertEquals("测试", aTree.prefixMap("点").get("点评"));
+        assertFalse(aTree.prefixMap("点").isEmpty());
+        assertEquals(1, aTree.prefixMap("点").size());
+        assertEquals(1, aTree.prefixMap("点").size());
+        assertEquals(1, aTree.prefixMap("点").entrySet().size());
+        assertEquals(1, aTree.prefixMap("点评").size());
+
+        aTree.clear();
+        aTree.put("点评", "联盟");
+        aTree.put("点版", "定向");
+        assertEquals(2, aTree.prefixMap("点").size());
+        assertEquals(2, aTree.prefixMap("点").size());
+    }
+
+    @Test
+    void testPrefixMapSizes2() {
+        final char u8000 = Character.toChars(32768)[0]; // U+8000 (1000000000000000)
+        final char char_b = 'b'; // 1100010
+
+        final PatriciaTrie<String> trie = new PatriciaTrie<>();
+        final String prefixString = StringUtils.EMPTY + char_b;
+        final String longerString = prefixString + u8000;
+
+        assertEquals(1, prefixString.length());
+        assertEquals(2, longerString.length());
+
+        assertTrue(longerString.startsWith(prefixString));
+
+        trie.put(prefixString, "prefixString");
+        trie.put(longerString, "longerString");
+
+        assertEquals(2, trie.prefixMap(prefixString).size());
+        assertTrue(trie.prefixMap(prefixString).containsKey(longerString));
+    }
+
+    @Test
+    void testSubmap() {
+        final PatriciaTrie<String> trie = new PatriciaTrie<>();
+        trie.put("ga", "ga");
+        trie.put("gb", "gb");
+        trie.put("gc", "gc");
+        trie.put("gd", "gd");
+        trie.put("ge", "ge");
+
+        // subMap should be entire trie
+        SortedMap<String, String> subMap = trie.subMap("a", "z");
+        assertEquals(5, subMap.size());
+        assertEquals("ga", subMap.get("ga"));
+        assertEquals("gb", subMap.get("gb"));
+        assertEquals("gc", subMap.get("gc"));
+        assertEquals("gd", subMap.get("gd"));
+        assertEquals("ge", subMap.get("ge"));
+
+        // subMap should be empty
+        subMap = trie.subMap("a", "a");
+        assertEquals(0, subMap.size());
+
+        // subMap() is not inclusive of the second key
+        // subMap should be 4 entries only - "ge" excluded
+        subMap = trie.subMap("ga", "ge");
+        assertEquals(4, subMap.size());
+        assertEquals("ga", subMap.get("ga"));
+        assertEquals("gb", subMap.get("gb"));
+        assertEquals("gc", subMap.get("gc"));
+        assertEquals("gd", subMap.get("gd"));
+        assertNull(subMap.get("ge"));
+
+        // subMap should be 5 entries
+        subMap = trie.subMap("ga", "gf");
+        assertEquals(5, subMap.size());
+        assertEquals("ga", subMap.get("ga"));
+        assertEquals("gb", subMap.get("gb"));
+        assertEquals("gc", subMap.get("gc"));
+        assertEquals("gd", subMap.get("gd"));
+        assertEquals("ge", subMap.get("ge"));
+
+        // subMap should be 4 entries - "ga" excluded
+        subMap = trie.subMap("gb", "z");
+        assertEquals(4, subMap.size());
+        assertNull(subMap.get("ga"));
+        assertEquals("gb", subMap.get("gb"));
+        assertEquals("gc", subMap.get("gc"));
+        assertEquals("gd", subMap.get("gd"));
+        assertEquals("ge", subMap.get("ge"));
+
+
+        // subMap should be 1 entry - "gc" only
+        subMap = trie.subMap("gc", "gd");
+        assertEquals(1, subMap.size());
+        assertNull(subMap.get("ga"));
+        assertNull(subMap.get("gb"));
+        assertEquals("gc", subMap.get("gc"));
+        assertNull(subMap.get("gd"));
+        assertNull(subMap.get("ge"));
+    }
+
+    @Test
+    void testTailMap() {
+        final PatriciaTrie<String> trie = new PatriciaTrie<>();
+        trie.put("ga", "ga");
+        trie.put("gb", "gb");
+        trie.put("gc", "gc");
+        trie.put("gd", "gd");
+        trie.put("ge", "ge");
+
+        // tailMap should be entire trie
+        SortedMap<String, String> tailMap = trie.tailMap("a");
+        assertEquals(5, tailMap.size());
+        assertEquals("ga", tailMap.get("ga"));
+        assertEquals("gb", tailMap.get("gb"));
+        assertEquals("gc", tailMap.get("gc"));
+        assertEquals("gd", tailMap.get("gd"));
+        assertEquals("ge", tailMap.get("ge"));
+
+        // tailMap should be empty
+        tailMap = trie.tailMap("z");
+        assertEquals(0, tailMap.size());
+
+        // tailMap is inclusive of the search key
+        // tailMap should be the entire trie
+        tailMap = trie.tailMap("ga");
+        assertEquals(5, tailMap.size());
+        assertEquals("ga", tailMap.get("ga"));
+        assertEquals("gb", tailMap.get("gb"));
+        assertEquals("gc", tailMap.get("gc"));
+        assertEquals("gd", tailMap.get("gd"));
+        assertEquals("ge", tailMap.get("ge"));
+
+        // tailMap should be single entry "ge"
+        tailMap = trie.tailMap("ge");
+        assertEquals(1, tailMap.size());
+        assertNull(tailMap.get("ga"));
+        assertNull(tailMap.get("gb"));
+        assertNull(tailMap.get("gc"));
+        assertNull(tailMap.get("gd"));
+        assertEquals("ge", tailMap.get("ge"));
+    }
+
+//    void testCreate() throws Exception {
+//        resetEmpty();
+//        writeExternalFormToDisk(
+//            (java.io.Serializable) map,
+//            "src/test/resources/data/test/PatriciaTrie.emptyCollection.version4.obj");
+//        resetFull();
+//        writeExternalFormToDisk(
+//            (java.io.Serializable) map,
+//            "src/test/resources/data/test/PatriciaTrie.fullCollection.version4.obj");
+//    }
+}

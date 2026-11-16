@@ -4,9 +4,9 @@ on:
   pull_request:
     paths:
       - '.github/workflows/m3-commons-bloom-nonzero-mask-20261113.yml'
-      - 'src/main/java/com/m3/collections/apache/bloomfilter/ArrayCountingBloomFilter.java'
-      - 'src/test/java/com/m3/collections/apache/bloomfilter/ArrayCountingBloomFilterMaskTest.java'
-      - 'src/test/java/com/m3/collections/apache/bloomfilter/ArrayCountingBloomFilterMaskExportTest.java'
+      - 'src/main/java/org/apache/commons/collections4/bloomfilter/ArrayCountingBloomFilter.java'
+      - 'src/test/java/org/apache/commons/collections4/bloomfilter/ArrayCountingBloomFilterMaskTest.java'
+      - 'src/test/java/org/apache/commons/collections4/bloomfilter/ArrayCountingBloomFilterMaskExportTest.java'
   workflow_dispatch:
 permissions:
   contents: read
