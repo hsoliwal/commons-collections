@@ -14,12 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.commons.collections4.iterators;
+package com.m3.collections.apache.iterators;
 
 import java.util.Iterator;
 import java.util.Objects;
 
-import org.apache.commons.collections4.Unmodifiable;
+import com.m3.collections.apache.Unmodifiable;
 
 /**
  * Decorates an iterator such that it cannot be modified.

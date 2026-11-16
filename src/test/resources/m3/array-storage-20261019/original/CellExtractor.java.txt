@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.commons.collections4.bloomfilter;
+package com.m3.collections.apache.bloomfilter;
 
 import java.util.TreeMap;
 import java.util.function.BiPredicate;

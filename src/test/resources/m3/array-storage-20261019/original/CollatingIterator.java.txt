@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.commons.collections4.iterators;
+package com.m3.collections.apache.iterators;
 
 import java.util.ArrayList;
 import java.util.BitSet;
@@ -25,8 +25,8 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 
-import org.apache.commons.collections4.comparators.ComparableComparator;
-import org.apache.commons.collections4.list.UnmodifiableList;
+import com.m3.collections.apache.comparators.ComparableComparator;
+import com.m3.collections.apache.list.UnmodifiableList;
 
 /**
  * Provides an ordered iteration over the elements contained in a collection of

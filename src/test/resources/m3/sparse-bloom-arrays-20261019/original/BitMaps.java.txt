@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.commons.collections4.bloomfilter;
+package com.m3.collections.apache.bloomfilter;
 
 /**
  * Contains functions to convert {@code int} indices into Bloom filter bit positions and visa versa.
