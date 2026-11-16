@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 // Modified 2026 by Hitesh Soliwal and contributors: direct reference-array reads with reflective fallbacks.
+// Modified 2026 by Synexia contributors: reuse typed primitive reads from ArrayIterator.
 package com.m3.collections.apache.iterators;
 
 import java.lang.reflect.Array;
@@ -136,7 +137,10 @@ public class ArrayListIterator<E> extends ArrayIterator<E>
                 return (E) values[index++];
             }
         }
-        // Preserve primitive boxing and reflective failures for overridden bounds.
+        if (index >= 0 && index < endIndex) {
+            return (E) primitiveAt(array, index++);
+        }
+        // Subclasses can override hasNext() and admit invalid positions.
         return (E) Array.get(array, index++);
     }
 
@@ -168,6 +172,9 @@ public class ArrayListIterator<E> extends ArrayIterator<E>
             if (index >= 0 && index < values.length) {
                 return (E) values[index];
             }
+        }
+        if (index >= 0 && index < endIndex) {
+            return (E) primitiveAt(array, index);
         }
         // A subclass may have admitted a position outside the backing array.
         return (E) Array.get(array, index);
@@ -218,6 +225,12 @@ public class ArrayListIterator<E> extends ArrayIterator<E>
             throw new IllegalStateException("must call next() or previous() before a call to set()");
         }
 
+        // Exact wrapper types can use Java's primitive array lanes. Preserve
+        // Array.set's widening, null/incompatible and invalid-index behavior.
+        if (!(array instanceof Object[]) && lastItemIndex >= 0 && lastItemIndex < endIndex
+                && writePrimitive(array, lastItemIndex, o)) {
+            return;
+        }
         Array.set(array, lastItemIndex, o);
     }
 

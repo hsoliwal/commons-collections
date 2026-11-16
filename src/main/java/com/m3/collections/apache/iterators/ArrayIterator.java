@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 // Modified 2026 by Hitesh Soliwal and contributors: direct reference-array reads with reflective fallbacks.
+// Modified 2026 by Synexia contributors: direct Java-8 primitive array lanes.
 package com.m3.collections.apache.iterators;
 
 import java.lang.reflect.Array;
@@ -179,8 +180,75 @@ public class ArrayIterator<E> implements ResettableIterator<E> {
                 return (E) values[index++];
             }
         }
-        // Preserve primitive boxing and reflective failures for overridden bounds.
+        // Constructor-validated primitive ranges use direct typed loads.
+        // Overridden hasNext() and package-local cursor corruption can admit
+        // an invalid index: retain the original Array.get exception message.
+        if (index >= 0 && index < endIndex) {
+            return (E) primitiveAt(array, index++);
+        }
         return (E) Array.get(array, index++);
+    }
+
+    /**
+     * Read all eight primitive array kinds through direct typed lanes, avoiding
+     * java.lang.reflect.Array.get and retaining its boxing types. Callers only
+     * use this while a constructor-validated index remains within the slice;
+     * overridden bounds callbacks still delegate to Array.get for failures.
+     */
+    static Object primitiveAt(final Object source, final int position) {
+        if (source instanceof int[]) {
+            return ((int[]) source)[position];
+        }
+        if (source instanceof long[]) {
+            return ((long[]) source)[position];
+        }
+        if (source instanceof double[]) {
+            return ((double[]) source)[position];
+        }
+        if (source instanceof float[]) {
+            return ((float[]) source)[position];
+        }
+        if (source instanceof short[]) {
+            return ((short[]) source)[position];
+        }
+        if (source instanceof char[]) {
+            return ((char[]) source)[position];
+        }
+        if (source instanceof byte[]) {
+            return ((byte[]) source)[position];
+        }
+        if (source instanceof boolean[]) {
+            return ((boolean[]) source)[position];
+        }
+        return Array.get(source, position);
+    }
+
+    /**
+     * Exact boxed writes skip reflection; widening conversions, nulls and
+     * incompatible payloads intentionally fall back to Array.set in the caller.
+     * A caller must establish that the index is valid before invoking this.
+     */
+    static boolean writePrimitive(final Object source, final int position, final Object value) {
+        if (source instanceof int[] && value instanceof Integer) {
+            ((int[]) source)[position] = (Integer) value;
+        } else if (source instanceof long[] && value instanceof Long) {
+            ((long[]) source)[position] = (Long) value;
+        } else if (source instanceof double[] && value instanceof Double) {
+            ((double[]) source)[position] = (Double) value;
+        } else if (source instanceof float[] && value instanceof Float) {
+            ((float[]) source)[position] = (Float) value;
+        } else if (source instanceof short[] && value instanceof Short) {
+            ((short[]) source)[position] = (Short) value;
+        } else if (source instanceof char[] && value instanceof Character) {
+            ((char[]) source)[position] = (Character) value;
+        } else if (source instanceof byte[] && value instanceof Byte) {
+            ((byte[]) source)[position] = (Byte) value;
+        } else if (source instanceof boolean[] && value instanceof Boolean) {
+            ((boolean[]) source)[position] = (Boolean) value;
+        } else {
+            return false;
+        }
+        return true;
     }
 
     /**
