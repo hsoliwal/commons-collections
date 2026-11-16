@@ -1,0 +1,140 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.commons.collections4.keyvalue;
+
+import java.io.Serializable;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Objects;
+
+import org.apache.commons.collections4.KeyValue;
+
+/**
+ * A {@link Entry Map.Entry} tied to a map underneath.
+ * <p>
+ * This can be used to enable a map entry to make changes on the underlying
+ * map, however this will probably mess up any iterators.
+ * </p>
+ *
+ * @param <K> The type of keys
+ * @param <V> The type of mapped values
+ * @since 3.0
+ */
+public class TiedMapEntry<K, V> implements Map.Entry<K, V>, KeyValue<K, V>, Serializable {
+
+    /** Serialization version */
+    private static final long serialVersionUID = -8453869361373831205L;
+
+    /** The map underlying the entry/iterator */
+    private final Map<K, V> map;
+
+    /** The key */
+    private final K key;
+
+    /**
+     * Constructs a new entry with the given Map and key.
+     *
+     * @param map  The map
+     * @param key  The key
+     */
+    public TiedMapEntry(final Map<K, V> map, final K key) {
+        this.map = map;
+        this.key = key;
+    }
+
+    /**
+     * Compares this {@code Map.Entry} with another {@code Map.Entry}.
+     * <p>
+     * Implemented per API documentation of {@link java.util.Map.Entry#equals(Object)}
+     *
+     * @param obj  The object to compare to
+     * @return true if equal key and value
+     */
+    @Override
+    public boolean equals(final Object obj) {
+        if (obj == this) {
+            return true;
+        }
+        if (!(obj instanceof Map.Entry)) {
+            return false;
+        }
+        final Map.Entry<?, ?> other = (Map.Entry<?, ?>) obj;
+        return
+            Objects.equals(key, other.getKey()) &&
+            Objects.equals(getValue(), other.getValue());
+    }
+
+    /**
+     * Gets the key of this entry
+     *
+     * @return The key
+     */
+    @Override
+    public K getKey() {
+        return key;
+    }
+
+    /**
+     * Gets the value of this entry direct from the map.
+     *
+     * @return The value
+     */
+    @Override
+    public V getValue() {
+        return map.get(key);
+    }
+
+    /**
+     * Gets a hashCode compatible with the equals method.
+     * <p>
+     * Implemented per API documentation of {@link java.util.Map.Entry#hashCode()}
+     *
+     * @return A suitable hash code
+     */
+    @Override
+    public int hashCode() {
+        final Object value = getValue();
+        return (getKey() == null ? 0 : getKey().hashCode()) ^
+               (value == null ? 0 : value.hashCode());
+    }
+
+    /**
+     * Sets the value associated with the key direct onto the map.
+     *
+     * @param value  The new value
+     * @return The old value
+     * @throws IllegalArgumentException if the value is set to this map entry
+     */
+    @Override
+    public V setValue(final V value) {
+        if (value == this) {
+            throw new IllegalArgumentException("Cannot set value to this map entry");
+        }
+        return map.put(key, value);
+    }
+
+    /**
+     * Gets a string version of the entry.
+     *
+     * @return entry as a string
+     */
+    @Override
+    public String toString() {
+        return getKey() + "=" + getValue();
+    }
+
+}

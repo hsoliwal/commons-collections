@@ -1,0 +1,195 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.commons.collections4.set;
+
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.SortedSet;
+import java.util.function.Predicate;
+
+import org.apache.commons.collections4.Unmodifiable;
+import org.apache.commons.collections4.iterators.UnmodifiableIterator;
+
+/**
+ * Decorates another {@code SortedSet} to ensure it can't be altered.
+ * <p>
+ * This class is Serializable from Commons Collections 3.1.
+ * </p>
+ * <p>
+ * Attempts to modify it will result in an UnsupportedOperationException.
+ * </p>
+ *
+ * @param <E> The type of the elements in this set
+ * @since 3.0
+ */
+public final class UnmodifiableSortedSet<E>
+        extends AbstractSortedSetDecorator<E>
+        implements Unmodifiable {
+
+    /** Serialization version */
+    private static final long serialVersionUID = -725356885467962424L;
+
+    /**
+     * Factory method to create an unmodifiable set.
+     *
+     * @param <E> The element type
+     * @param set  The set to decorate, must not be null
+     * @return A new unmodifiable {@link SortedSet}
+     * @throws NullPointerException if set is null
+     * @since 4.0
+     */
+    public static <E> SortedSet<E> unmodifiableSortedSet(final SortedSet<E> set) {
+        if (set instanceof Unmodifiable) {
+            return set;
+        }
+        return new UnmodifiableSortedSet<>(set);
+    }
+
+    /**
+     * Constructor that wraps (not copies).
+     *
+     * @param set  The set to decorate, must not be null
+     * @throws NullPointerException if set is null
+     */
+    private UnmodifiableSortedSet(final SortedSet<E> set) {
+        super(set);
+    }
+
+    /**
+     * Always throws {@link UnsupportedOperationException}.
+     *
+     * @param object Ignored.
+     * @throws UnsupportedOperationException Always thrown.
+     */
+    @Override
+    public boolean add(final E object) {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Always throws {@link UnsupportedOperationException}.
+     *
+     * @param coll Ignored.
+     * @throws UnsupportedOperationException Always thrown.
+     */
+    @Override
+    public boolean addAll(final Collection<? extends E> coll) {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Always throws {@link UnsupportedOperationException}.
+     *
+     * @throws UnsupportedOperationException Always thrown.
+     */
+    @Override
+    public void clear() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public SortedSet<E> headSet(final E toElement) {
+        return unmodifiableSortedSet(decorated().headSet(toElement));
+    }
+
+    @Override
+    public Iterator<E> iterator() {
+        return UnmodifiableIterator.unmodifiableIterator(decorated().iterator());
+    }
+
+    /**
+     * Deserializes the collection in using a custom routine.
+     *
+     * @param in  The input stream
+     * @throws IOException Thrown if an error occurs while reading from the stream
+     * @throws ClassNotFoundException if an object read from the stream cannot be loaded
+     */
+    @SuppressWarnings("unchecked") // (1) should only fail if input stream is incorrect
+    private void readObject(final ObjectInputStream in) throws IOException, ClassNotFoundException {
+        in.defaultReadObject();
+        setCollection((Collection<E>) in.readObject()); // (1)
+    }
+
+    /**
+     * Always throws {@link UnsupportedOperationException}.
+     *
+     * @param object Ignored.
+     * @throws UnsupportedOperationException Always thrown.
+     */
+    @Override
+    public boolean remove(final Object object) {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Always throws {@link UnsupportedOperationException}.
+     *
+     * @param coll Ignored.
+     * @throws UnsupportedOperationException Always thrown.
+     */
+    @Override
+    public boolean removeAll(final Collection<?> coll) {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Always throws {@link UnsupportedOperationException}.
+     *
+     * @param filter Ignored.
+     * @throws UnsupportedOperationException Always thrown.
+     * @since 4.4
+     */
+    @Override
+    public boolean removeIf(final Predicate<? super E> filter) {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Always throws {@link UnsupportedOperationException}.
+     *
+     * @throws UnsupportedOperationException Always thrown.
+     */
+    @Override
+    public boolean retainAll(final Collection<?> coll) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public SortedSet<E> subSet(final E fromElement, final E toElement) {
+        return unmodifiableSortedSet(decorated().subSet(fromElement, toElement));
+    }
+
+    @Override
+    public SortedSet<E> tailSet(final E fromElement) {
+        return unmodifiableSortedSet(decorated().tailSet(fromElement));
+    }
+
+    /**
+     * Serializes this object to an ObjectOutputStream.
+     *
+     * @param out The target ObjectOutputStream.
+     * @throws IOException thrown when an I/O errors occur writing to the target stream.
+     */
+    private void writeObject(final ObjectOutputStream out) throws IOException {
+        out.defaultWriteObject();
+        out.writeObject(decorated());
+    }
+
+}

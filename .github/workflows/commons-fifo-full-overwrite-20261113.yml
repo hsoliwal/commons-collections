@@ -4,9 +4,9 @@ name: Commons CircularFifoQueue owned full-overwrite (Java 8 API on JDK 21)
 on:
   pull_request:
     paths:
-      - 'src/main/java/com/m3/collections/apache/queue/CircularFifoQueue.java'
-      - 'src/test/java/com/m3/collections/apache/queue/CircularFifoQueueFullOverwriteTest.java'
-      - 'src/test/java/com/m3/collections/apache/queue/CircularFifoQueueBulkArrayTest.java'
+      - 'src/main/java/org/apache/commons/collections4/queue/CircularFifoQueue.java'
+      - 'src/test/java/org/apache/commons/collections4/queue/CircularFifoQueueFullOverwriteTest.java'
+      - 'src/test/java/org/apache/commons/collections4/queue/CircularFifoQueueBulkArrayTest.java'
       - '.github/workflows/commons-fifo-full-overwrite-20261113.yml'
   workflow_dispatch:
 
@@ -30,16 +30,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          SOURCE=src/main/java/com/m3/collections/apache/queue/CircularFifoQueue.java
+          SOURCE=src/main/java/org/apache/commons/collections4/queue/CircularFifoQueue.java
           test "$(git hash-object "$SOURCE")" = "0dbf5dacd07e8766e143320e0a0cf2467c071c00"
           test "$(sha256sum "$SOURCE" | cut -d ' ' -f1)" = "680028128301661914479c1090bb2001691a5560ddad036118801eada545645d"
           mkdir -p target/owned-fifo-source-proof
           javac --release 8 -proc:none -Xlint:all,-options,-this-escape -Werror \
             -d target/owned-fifo-source-proof \
-            src/main/java/com/m3/collections/apache/BoundedCollection.java \
+            src/main/java/org/apache/commons/collections4/BoundedCollection.java \
             "$SOURCE"
           javap -public -s -classpath target/owned-fifo-source-proof \
-            com.m3.collections.apache.queue.CircularFifoQueue > target/owned-fifo-source-proof/api.txt
+            org.apache.commons.collections4.queue.CircularFifoQueue > target/owned-fifo-source-proof/api.txt
       - name: Run actual Commons Maven JUnit regression (not optional)
         shell: bash
         run: |

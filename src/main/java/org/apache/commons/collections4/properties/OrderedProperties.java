@@ -1,0 +1,328 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.commons.collections4.properties;
+
+import java.util.AbstractCollection;
+import java.util.AbstractMap.SimpleEntry;
+import java.util.AbstractSet;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Enumeration;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Properties;
+import java.util.Set;
+import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+/**
+ * A drop-in replacement for {@link Properties} for ordered keys.
+ * <p>
+ * Overrides methods to keep keys in insertion order. Allows other methods in the superclass to work with ordered keys.
+ * </p>
+ *
+ * @see OrderedPropertiesFactory#INSTANCE
+ * @since 4.5.0-M1
+ */
+public class OrderedProperties extends Properties {
+
+    /**
+     * A key set view in insertion order.
+     */
+    private final class KeySet extends AbstractSet<Object> {
+
+        @Override
+        public void clear() {
+            OrderedProperties.this.clear();
+        }
+
+        @Override
+        public boolean contains(final Object key) {
+            return containsKey(key);
+        }
+
+        @Override
+        public Iterator<Object> iterator() {
+            return orderedKeysIterator();
+        }
+
+        @Override
+        public boolean remove(final Object key) {
+            return OrderedProperties.this.remove(key) != null;
+        }
+
+        @Override
+        public int size() {
+            return OrderedProperties.this.size();
+        }
+    }
+
+    /**
+     * A values view in key insertion order.
+     */
+    private final class Values extends AbstractCollection<Object> {
+
+        @Override
+        public void clear() {
+            OrderedProperties.this.clear();
+        }
+
+        @Override
+        public boolean contains(final Object value) {
+            return containsValue(value);
+        }
+
+        @Override
+        public Iterator<Object> iterator() {
+            final Iterator<Object> keys = orderedKeysIterator();
+            return new Iterator<Object>() {
+
+                @Override
+                public boolean hasNext() {
+                    return keys.hasNext();
+                }
+
+                @Override
+                public Object next() {
+                    return get(keys.next());
+                }
+
+                @Override
+                public void remove() {
+                    keys.remove();
+                }
+            };
+        }
+
+        @Override
+        public int size() {
+            return OrderedProperties.this.size();
+        }
+    }
+
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * Preserves the insertion order.
+     */
+    private final LinkedHashSet<Object> orderedKeys = new LinkedHashSet<>();
+
+    /**
+     * Constructs a new instance.
+     */
+    public OrderedProperties() {
+        // empty
+    }
+
+    @Override
+    public synchronized void clear() {
+        orderedKeys.clear();
+        super.clear();
+    }
+
+    @Override
+    public synchronized Object compute(final Object key, final BiFunction<? super Object, ? super Object, ? extends Object> remappingFunction) {
+        final Object compute = super.compute(key, remappingFunction);
+        if (compute != null) {
+            orderedKeys.add(key);
+        } else {
+            orderedKeys.remove(key);
+        }
+        return compute;
+    }
+
+    @Override
+    public synchronized Object computeIfAbsent(final Object key, final Function<? super Object, ? extends Object> mappingFunction) {
+        final Object computeIfAbsent = super.computeIfAbsent(key, mappingFunction);
+        if (computeIfAbsent != null) {
+            orderedKeys.add(key);
+        }
+        return computeIfAbsent;
+    }
+
+    @Override
+    public Set<Map.Entry<Object, Object>> entrySet() {
+        return orderedKeys.stream().map(k -> new SimpleEntry<>(k, get(k))).collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    /**
+     * Enumerates all key/value pairs in the specified LinkedHashSet and omits the property if the key or value is not a string.
+     *
+     * @param result The result set to populate.
+     * @return The given set.
+     */
+    private synchronized LinkedHashSet<String> enumerateStringProperties(final LinkedHashSet<String> result) {
+        if (defaults != null) {
+            result.addAll(defaults.stringPropertyNames());
+        }
+        for (final Enumeration<?> e = keys(); e.hasMoreElements();) {
+            final Object k = e.nextElement();
+            final Object v = get(k);
+            if (k instanceof String && v instanceof String) {
+                result.add((String) k);
+            }
+        }
+        return result;
+    }
+
+    @Override
+    public synchronized void forEach(final BiConsumer<? super Object, ? super Object> action) {
+        Objects.requireNonNull(action, "action");
+        orderedKeys.forEach(k -> action.accept(k, get(k)));
+    }
+
+    @Override
+    public synchronized Enumeration<Object> keys() {
+        return Collections.enumeration(orderedKeys);
+    }
+
+    @Override
+    public Set<Object> keySet() {
+        return new KeySet();
+    }
+
+    @Override
+    public synchronized Object merge(final Object key, final Object value,
+            final BiFunction<? super Object, ? super Object, ? extends Object> remappingFunction) {
+        final Object merge = super.merge(key, value, remappingFunction);
+        if (merge != null) {
+            orderedKeys.add(key);
+        } else {
+            orderedKeys.remove(key);
+        }
+        return merge;
+    }
+
+    /**
+     * Creates an iterator over the keys in insertion order whose {@link Iterator#remove()} also removes the mapping.
+     *
+     * @return A new iterator.
+     */
+    private Iterator<Object> orderedKeysIterator() {
+        final Iterator<Object> iterator = orderedKeys.iterator();
+        return new Iterator<Object>() {
+
+            private Object last;
+
+            @Override
+            public boolean hasNext() {
+                return iterator.hasNext();
+            }
+
+            @Override
+            public Object next() {
+                last = iterator.next();
+                return last;
+            }
+
+            @Override
+            public void remove() {
+                // All orderedKeys writes happen under the OrderedProperties monitor.
+                synchronized (OrderedProperties.this) {
+                    // Not remove(Object), which would edit orderedKeys while this iterator walks it.
+                    iterator.remove();
+                    OrderedProperties.super.remove(last);
+                }
+            }
+        };
+    }
+
+    @Override
+    public Enumeration<?> propertyNames() {
+        return Collections.enumeration(stringPropertyNames());
+    }
+
+    @Override
+    public synchronized Object put(final Object key, final Object value) {
+        final Object put = super.put(key, value);
+        if (put == null) {
+            orderedKeys.add(key);
+        }
+        return put;
+    }
+
+    @Override
+    public synchronized void putAll(final Map<? extends Object, ? extends Object> t) {
+        orderedKeys.addAll(t.keySet());
+        super.putAll(t);
+    }
+
+    @Override
+    public synchronized Object putIfAbsent(final Object key, final Object value) {
+        final Object putIfAbsent = super.putIfAbsent(key, value);
+        if (putIfAbsent == null) {
+            orderedKeys.add(key);
+        }
+        return putIfAbsent;
+    }
+
+    @Override
+    public synchronized Object remove(final Object key) {
+        final Object remove = super.remove(key);
+        if (remove != null) {
+            orderedKeys.remove(key);
+        }
+        return remove;
+    }
+
+    @Override
+    public synchronized boolean remove(final Object key, final Object value) {
+        final boolean remove = super.remove(key, value);
+        if (remove) {
+            orderedKeys.remove(key);
+        }
+        return remove;
+    }
+
+    @Override
+    public Set<String> stringPropertyNames() {
+        return enumerateStringProperties(new LinkedHashSet<>());
+    }
+
+    @Override
+    public synchronized String toString() {
+        // Must override for Java 17 to maintain order since the implementation is based on a map
+        final int max = size() - 1;
+        if (max == -1) {
+            return "{}";
+        }
+        final StringBuilder sb = new StringBuilder();
+        final Iterator<Map.Entry<Object, Object>> it = entrySet().iterator();
+        sb.append('{');
+        for (int i = 0;; i++) {
+            final Map.Entry<Object, Object> e = it.next();
+            final Object key = e.getKey();
+            final Object value = e.getValue();
+            sb.append(key == this ? "(this Map)" : key.toString());
+            sb.append('=');
+            sb.append(value == this ? "(this Map)" : value.toString());
+            if (i == max) {
+                return sb.append('}').toString();
+            }
+            sb.append(", ");
+        }
+    }
+
+    @Override
+    public Collection<Object> values() {
+        return new Values();
+    }
+}

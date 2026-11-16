@@ -3,8 +3,8 @@ name: M3 Commons indexed-ring differential
 on:
   pull_request:
     paths:
-      - 'src/main/java/com/m3/collections/apache/queue/CircularFifoQueue.java'
-      - 'src/test/java/com/m3/collections/apache/queue/M3CircularFifoQueueIndexTest.java'
+      - 'src/main/java/org/apache/commons/collections4/queue/CircularFifoQueue.java'
+      - 'src/test/java/org/apache/commons/collections4/queue/M3CircularFifoQueueIndexTest.java'
       - '.github/workflows/m3-arrayification-ring-20261101.yml'
   workflow_dispatch:
 permissions:
@@ -25,8 +25,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          printf 'c0aa469f19aad77631e5949221b9eec70fa4da5707ec6c964553c7a46ffb21b1  %s\n' 'src/main/java/com/m3/collections/apache/queue/CircularFifoQueue.java' | sha256sum -c -
-          printf '9da28e29eb0b3ff45859192c1fb65c2257847a148b84d8710b1d32e5ef916016  %s\n' 'src/test/java/com/m3/collections/apache/queue/M3CircularFifoQueueIndexTest.java' | sha256sum -c -
+          printf 'c0aa469f19aad77631e5949221b9eec70fa4da5707ec6c964553c7a46ffb21b1  %s\n' 'src/main/java/org/apache/commons/collections4/queue/CircularFifoQueue.java' | sha256sum -c -
+          printf '9da28e29eb0b3ff45859192c1fb65c2257847a148b84d8710b1d32e5ef916016  %s\n' 'src/test/java/org/apache/commons/collections4/queue/M3CircularFifoQueueIndexTest.java' | sha256sum -c -
       - name: Execute actual scoped Commons JUnit test
         shell: bash
         run: |
