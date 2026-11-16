@@ -28,7 +28,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /** Tests the contiguous array-store paths without changing the Bag contract. */
-class AbstractMapBagArrayFillTest {
+class MapBagArrayFillTest {
 
     @Test
     void repeatedAndNullMembersKeepExactCardinalitiesInBothExports() {
