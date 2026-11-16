@@ -514,6 +514,27 @@ public class LRUMapTest<K, V> extends AbstractOrderedMapTest<K, V> {
         assertSame(values[3], vit.next());
     }
 
+    /**
+     * A null key put into a full map reuses the entry of the least recently used key and must stay reachable.
+     */
+    @Test
+    void testNullKeyReusesEvictedEntry() {
+        final LRUMap<String, String> map = new LRUMap<>(2);
+        map.put("a", "1");
+        map.put("b", "2");
+        assertNull(map.put(null, "3"));
+        assertEquals(2, map.size());
+        assertFalse(map.containsKey("a"));
+        assertTrue(map.containsKey(null));
+        assertEquals("3", map.get(null));
+        assertEquals("3", map.put(null, "4"));
+        assertEquals(2, map.size());
+        assertEquals("4", map.remove(null));
+        assertFalse(map.containsKey(null));
+        assertEquals(1, map.size());
+        assertEquals("2", map.get("b"));
+    }
+
     @Test
     @SuppressWarnings("unchecked")
     void testRemoveLRU() {

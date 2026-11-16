@@ -1433,7 +1433,7 @@ public class AbstractHashedMap<K, V> extends AbstractMap<K, V> implements Iterab
                               final K key, final V value) {
         entry.next = data[hashIndex];
         entry.hashCode = hashCode;
-        entry.key = key;
+        entry.key = convertKey(key);
         entry.value = value;
     }
 
