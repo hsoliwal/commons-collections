@@ -1,0 +1,207 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.commons.collections4.map;
+
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
+
+import org.apache.commons.collections4.Factory;
+import org.apache.commons.collections4.Transformer;
+import org.apache.commons.collections4.functors.ConstantTransformer;
+import org.apache.commons.collections4.functors.FactoryTransformer;
+
+/**
+ * Decorates another {@code Map} returning a default value if the map
+ * does not contain the requested key.
+ * <p>
+ * When the {@link #get(Object)} method is called with a key that does not
+ * exist in the map, this map will return the default value specified in
+ * the constructor/factory. Only the get method is altered, so the
+ * {@link Map#containsKey(Object)} can be used to determine if a key really
+ * is in the map or not.
+ * </p>
+ * <p>
+ * The defaulted value is not added to the map.
+ * Compare this behavior with {@link LazyMap}, which does add the value
+ * to the map (via a Transformer).
+ * </p>
+ * <p>
+ * For instance:
+ * </p>
+ * <pre>
+ * Map map = new DefaultedMap("NULL");
+ * Object obj = map.get("Surname");
+ * // obj == "NULL"
+ * </pre>
+ * <p>
+ * After the above code is executed the map is still empty.
+ * </p>
+ * <p>
+ * <strong>Note that DefaultedMap is not synchronized and is not thread-safe.</strong>
+ * If you wish to use this map from multiple threads concurrently, you must use
+ * appropriate synchronization. The simplest approach is to wrap this map
+ * using {@link java.util.Collections#synchronizedMap(Map)}. This class may throw
+ * exceptions when accessed by concurrent threads without synchronization.
+ * </p>
+ *
+ * @param <K> The type of the keys in this map
+ * @param <V> The type of the values in this map
+ * @since 3.2
+ * @see LazyMap
+ */
+public class DefaultedMap<K, V> extends AbstractMapDecorator<K, V> implements Serializable {
+
+    /** Serialization version */
+    private static final long serialVersionUID = 19698628745827L;
+
+    /**
+     * Factory method to create a defaulting map.
+     * <p>
+     * The factory specified is called when a missing key is found.
+     * The result will be returned as the result of the map get(key) method.
+     *
+     * @param <K>  the key type
+     * @param <V>  the value type
+     * @param map  The map to decorate, must not be null
+     * @param factory  The factory to use to create entries, must not be null
+     * @return A new defaulting map
+     * @throws NullPointerException if map or factory is null
+     * @since 4.0
+     */
+    public static <K, V> DefaultedMap<K, V> defaultedMap(final Map<K, V> map, final Factory<? extends V> factory) {
+        return new DefaultedMap<>(map, FactoryTransformer.factoryTransformer(
+                Objects.requireNonNull(factory, "Factory must not be null")));
+    }
+
+    /**
+     * Factory method to create a defaulting map.
+     * <p>
+     * The transformer specified is called when a missing key is found.
+     * The key is passed to the transformer as the input, and the result
+     * will be returned as the result of the map get(key) method.
+     * </p>
+     *
+     * @param <K>  the key type
+     * @param <V>  the value type
+     * @param map  The map to decorate, must not be null
+     * @param transformer  The transformer to use as a factory to create entries, must not be null
+     * @return A new defaulting map
+     * @throws NullPointerException if map or transformer is null
+     * @since 4.0
+     */
+    public static <K, V> Map<K, V> defaultedMap(final Map<K, V> map,
+                                                final Transformer<? super K, ? extends V> transformer) {
+        return new DefaultedMap<>(map, Objects.requireNonNull(transformer, "Transformer must not be null"));
+    }
+
+    /**
+     * Factory method to create a defaulting map.
+     * <p>
+     * The value specified is returned when a missing key is found.
+     * </p>
+     *
+     * @param <K>  the key type
+     * @param <V>  the value type
+     * @param map  The map to decorate, must not be null
+     * @param defaultValue  The default value to return when the key is not found
+     * @return A new defaulting map
+     * @throws NullPointerException if map is null
+     * @since 4.0
+     */
+    public static <K, V> DefaultedMap<K, V> defaultedMap(final Map<K, V> map, final V defaultValue) {
+        return new DefaultedMap<>(map, ConstantTransformer.constantTransformer(defaultValue));
+    }
+
+    /** The transformer to use if the map does not contain a key */
+    private final Transformer<? super K, ? extends V> value;
+
+    /**
+     * Constructor that wraps (not copies).
+     *
+     * @param map  The map to decorate, must not be null
+     * @param defaultValueTransformer  The value transformer to use
+     * @throws NullPointerException if map or transformer is null
+     */
+    protected DefaultedMap(final Map<K, V> map, final Transformer<? super K, ? extends V> defaultValueTransformer) {
+        super(map);
+        this.value = Objects.requireNonNull(defaultValueTransformer, "defaultValueTransformer");
+    }
+
+    /**
+     * Constructs a new empty {@code DefaultedMap} that decorates a {@code HashMap}.
+     *
+     * @param defaultValueTransformer transformer to use to generate missing values.
+     */
+    public DefaultedMap(final Transformer<? super K, ? extends V> defaultValueTransformer) {
+        this(new HashMap<>(), defaultValueTransformer);
+    }
+
+    /**
+     * Constructs a new empty {@code DefaultedMap} that decorates
+     * a {@code HashMap}.
+     * <p>
+     * The object passed in will be returned by the map whenever an
+     * unknown key is requested.
+     * </p>
+     *
+     * @param defaultValue  The default value to return when the key is not found
+     */
+    public DefaultedMap(final V defaultValue) {
+        this(ConstantTransformer.constantTransformer(defaultValue));
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public V get(final Object key) {
+        final V v;
+        return (v = map.get(key)) != null || map.containsKey(key)
+            ? v
+            : value.apply((K) key);
+    }
+
+    /**
+     * Deserializes the map in using a custom routine.
+     *
+     * @param in  The input stream
+     * @throws IOException Thrown if an error occurs while reading from the stream
+     * @throws ClassNotFoundException if an object read from the stream cannot be loaded
+     */
+    @SuppressWarnings("unchecked")
+    private void readObject(final ObjectInputStream in) throws IOException, ClassNotFoundException {
+        in.defaultReadObject();
+        map = (Map<K, V>) in.readObject();
+    }
+
+    /**
+     * Serializes this object to an ObjectOutputStream.
+     *
+     * @param out The target ObjectOutputStream.
+     * @throws IOException thrown when an I/O errors occur writing to the target stream.
+     */
+    private void writeObject(final ObjectOutputStream out) throws IOException {
+        out.defaultWriteObject();
+        out.writeObject(map);
+    }
+
+    // no need to wrap keySet, entrySet or values as they are views of
+    // existing map entries - you can't do a map-style get on them.
+}
