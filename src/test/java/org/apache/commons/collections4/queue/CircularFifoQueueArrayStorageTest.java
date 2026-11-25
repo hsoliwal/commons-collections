@@ -19,6 +19,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 // Modified 2026 by Hitesh Soliwal and contributors: qualify exact inherited overrides without widening the API.
+// Modified 2026 by Hitesh Soliwal and contributors: bind admitted membership/default overrides and reject surface drift.
 package org.apache.commons.collections4.queue;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -28,6 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -46,6 +48,7 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Queue;
 import java.util.TreeSet;
+import java.util.function.Consumer;
 
 import org.apache.commons.collections4.ArrayStorageOracle;
 import org.junit.jupiter.api.AfterAll;
@@ -292,6 +295,39 @@ class CircularFifoQueueArrayStorageTest {
                 Arrays.toString(ObjectStreamClass.lookup(CircularFifoQueue.class).getFields()));
     }
 
+    @Test
+    void declaredSurfaceRejectsUnexpectedAndMissingOriginalMembers() throws Exception {
+        final Class<?> owner = SurfaceFixture.class;
+        final TreeSet<String> baseline = surface(owner);
+        assertEquals(baseline, declaredSurfaceWithExactArrayOverrides(owner, owner, baseline));
+
+        final TreeSet<String> added = new TreeSet<>(baseline);
+        final Method unexpected = UnexpectedSurfaceFixture.class.getDeclaredMethod("toArray", int.class);
+        final String declaration = unexpected.toGenericString().replace(
+                UnexpectedSurfaceFixture.class.getName() + ".", owner.getName() + ".");
+        assertTrue(added.add(declaration), "inject an unadmitted overload of an admitted name");
+        assertThrows(AssertionError.class,
+                () -> assertEquals(baseline, declaredSurfaceWithExactArrayOverrides(owner, owner, added)));
+
+        for (final String name : Arrays.asList("originalPublic", "originalProtected")) {
+            final TreeSet<String> missing = new TreeSet<>(baseline);
+            assertTrue(missing.remove(owner.getDeclaredMethod(name).toGenericString()), "remove the frozen declaration");
+            assertThrows(AssertionError.class,
+                    () -> assertEquals(baseline, declaredSurfaceWithExactArrayOverrides(owner, owner, missing)));
+        }
+    }
+
+    @Test
+    void forEachBindingRejectsIncompatibleDeclarations() throws Exception {
+        for (final Class<?> owner : Arrays.asList(RawForEachFixture.class, FinalForEachFixture.class,
+                StaticForEachFixture.class, WrongWildcardForEachFixture.class, WrongReturnForEachFixture.class)) {
+            final Method method = owner.getDeclaredMethod("forEach", Consumer.class);
+            assertThrows(AssertionError.class, () -> forEachDeclarationSignature(method), owner.getSimpleName());
+        }
+        final Method varargs = VarargsForEachFixture.class.getDeclaredMethod("forEach", Consumer[].class);
+        assertThrows(AssertionError.class, () -> forEachDeclarationSignature(varargs), "variable arity is not admitted");
+    }
+
     /** JaCoCo's offline/agent probe array; never part of the original or current storage surface. */
     private static boolean isJacocoDataField(final Field field) {
         return field.isSynthetic() && "$jacocoData".equals(field.getName())
@@ -321,39 +357,57 @@ class CircularFifoQueueArrayStorageTest {
 
     /**
      * Preserve every old declaration and allow only exact implementations of the
-     * two operations that the frozen preimage already inherits from AbstractCollection.
-     * five operations that the frozen preimage already inherits from AbstractCollection.
+     * seven inherited AbstractCollection methods and the inherited Iterable forEach.
      * The declarations remain optional so this gate also accepts the unchanged baseline.
      */
     private static TreeSet<String> declaredSurfaceWithExactArrayOverrides(final Class<?> original,
             final Class<?> current) throws Exception {
-        final TreeSet<String> result = surface(current);
-        // Exact AbstractCollection methods the fork overrides for ring-span exports, ring
-        // membership/removal and bulk-tail writes; every other declaration must stay original.
+        return declaredSurfaceWithExactArrayOverrides(original, current, surface(current));
+    }
+
+    /** Also accepts an independently mutated declaration inventory for the negative gate tests. */
+    private static TreeSet<String> declaredSurfaceWithExactArrayOverrides(final Class<?> original,
+            final Class<?> current, final TreeSet<String> declarations) throws Exception {
+        final TreeSet<String> result = new TreeSet<>(declarations);
+        // Only these already inherited operations may become exact class declarations.
         final Object[][] admitted = {
-            {"toArray", new Class<?>[0]}, {"toArray", new Class<?>[] {Object[].class}},
-            {"contains", new Class<?>[] {Object.class}}, {"remove", new Class<?>[] {Object.class}},
-            {"addAll", new Class<?>[] {java.util.Collection.class}}};
+            {"toArray", new Class<?>[0], AbstractCollection.class},
+            {"toArray", new Class<?>[] {Object[].class}, AbstractCollection.class},
+            {"contains", new Class<?>[] {Object.class}, AbstractCollection.class},
+            {"remove", new Class<?>[] {Object.class}, AbstractCollection.class},
+            {"addAll", new Class<?>[] {Collection.class}, AbstractCollection.class},
+            {"removeAll", new Class<?>[] {Collection.class}, AbstractCollection.class},
+            {"retainAll", new Class<?>[] {Collection.class}, AbstractCollection.class},
+            {"forEach", new Class<?>[] {Consumer.class}, Iterable.class}};
         for (final Object[] entry : admitted) {
             final String name = (String) entry[0];
             final Class<?>[] parameters = (Class<?>[]) entry[1];
             final Method inherited = original.getMethod(name, parameters);
-            assertEquals(AbstractCollection.class, inherited.getDeclaringClass(), "frozen inherited owner");
+            assertEquals(entry[2], inherited.getDeclaringClass(), "frozen inherited owner");
             final Method implementation;
             try {
                 implementation = current.getDeclaredMethod(name, parameters);
             } catch (final NoSuchMethodException stillInherited) {
                 continue;
             }
-            assertEquals(methodSignature(inherited), methodSignature(implementation),
+            assertEquals(methodSignature(inherited, original), methodSignature(implementation, current),
                     "override must preserve modifiers, generic signature and declared exceptions");
             result.remove(implementation.toGenericString());
         }
         return result;
     }
 
-    /** Normalize only a method's declaring-owner spelling, never its generic or throws surface. */
-    private static String methodSignature(final Method method) {
+    /**
+     * Normalize declaring-owner spelling. Only the admitted Iterable default also
+     * maps its owner type variable and default marker after validating the exact binding.
+     */
+    private static String methodSignature(final Method method, final Class<?> receiver) {
+        if ("forEach".equals(method.getName()) && Arrays.equals(new Class<?>[] {Consumer.class}, method.getParameterTypes())) {
+            final Class<?> owner = method.getDeclaringClass();
+            assertTrue(owner == Iterable.class || owner == receiver, "exact inherited or receiving forEach owner");
+            assertTrue(Iterable.class.isAssignableFrom(receiver), "receiver implements the inherited Iterable contract");
+            return forEachDeclarationSignature(method);
+        }
         final String declaration = method.toGenericString();
         final String owner = method.getDeclaringClass().getName() + ".";
         final int start = declaration.indexOf(owner + method.getName() + "(");
@@ -363,10 +417,25 @@ class CircularFifoQueueArrayStorageTest {
         return declaration.substring(0, start) + declaration.substring(start + owner.length());
     }
 
+    /** Validate the complete declaration before normalizing the one admitted element-variable binding. */
+    private static String forEachDeclarationSignature(final Method method) {
+        final Class<?> owner = method.getDeclaringClass();
+        assertFalse(method.isVarArgs(), "forEach is not variable arity");
+        assertEquals(Modifier.PUBLIC, method.getModifiers(), "forEach remains public and non-static, non-final");
+        assertEquals(owner == Iterable.class, method.isDefault(), "only the inherited method is a default");
+        assertEquals(1, owner.getTypeParameters().length, "one element type variable");
+        assertArrayEquals(new Object[] {Object.class}, owner.getTypeParameters()[0].getBounds(), "unchanged element bound");
+        final String element = owner.getTypeParameters()[0].getName();
+        final String expected = "public " + (owner == Iterable.class ? "default " : "") + "void "
+                + owner.getName() + ".forEach(java.util.function.Consumer<? super " + element + ">)";
+        assertEquals(expected, method.toGenericString(), "exact element variance, result and throws signature");
+        return "public void forEach(java.util.function.Consumer<? super E>)";
+    }
+
     /** All callable public and inherited protected signatures, with overriding resolved by erased parameters. */
     private static TreeSet<String> effectiveSurface(final Class<?> type) {
         final TreeSet<String> result = new TreeSet<>();
-        Arrays.stream(type.getMethods()).forEach(method -> result.add(methodSignature(method)));
+        Arrays.stream(type.getMethods()).forEach(method -> result.add(methodSignature(method, type)));
         final HashSet<String> hidden = new HashSet<>();
         for (Class<?> owner = type; owner != null; owner = owner.getSuperclass()) {
             final HashSet<String> declaredHere = new HashSet<>();
@@ -375,7 +444,7 @@ class CircularFifoQueueArrayStorageTest {
                 if (Modifier.isPublic(modifiers) || Modifier.isProtected(modifiers)) {
                     final String key = method.getName() + Arrays.toString(method.getParameterTypes());
                     if (Modifier.isProtected(modifiers) && !hidden.contains(key)) {
-                        result.add(methodSignature(method));
+                        result.add(methodSignature(method, type));
                     }
                     declaredHere.add(key);
                 }
@@ -395,6 +464,66 @@ class CircularFifoQueueArrayStorageTest {
                         || Modifier.isProtected(constructor.getModifiers()))
                 .forEach(constructor -> result.add(constructor.toGenericString()));
         return result;
+    }
+
+    /** Original public and protected declarations for independent inventory-mutation tests. */
+    private static class SurfaceFixture<E> extends AbstractCollection<E> {
+        @Override
+        public Iterator<E> iterator() {
+            return java.util.Collections.<E>emptyList().iterator();
+        }
+
+        @Override
+        public int size() {
+            return 0;
+        }
+
+        public void originalPublic() {
+        }
+
+        protected void originalProtected() {
+        }
+    }
+
+    private static final class UnexpectedSurfaceFixture {
+        public Object[] toArray(final int ignored) {
+            return null;
+        }
+    }
+
+    private static final class RawForEachFixture<E> extends SurfaceFixture<E> {
+        @Override
+        @SuppressWarnings("rawtypes")
+        public void forEach(final Consumer action) {
+        }
+    }
+
+    private static final class FinalForEachFixture<E> extends SurfaceFixture<E> {
+        @Override
+        public final void forEach(final Consumer<? super E> action) {
+        }
+    }
+
+    private static final class StaticForEachFixture<E> {
+        public static void forEach(final Consumer<?> action) {
+        }
+    }
+
+    private static final class WrongWildcardForEachFixture<E> {
+        public void forEach(final Consumer<? extends E> action) {
+        }
+    }
+
+    private static final class WrongReturnForEachFixture<E> {
+        public E forEach(final Consumer<? super E> action) {
+            return null;
+        }
+    }
+
+    private static final class VarargsForEachFixture<E> {
+        @SuppressWarnings({"unchecked", "varargs"})
+        public void forEach(final Consumer<? super E>... action) {
+        }
     }
 
     private static final class ObservingQueue extends CircularFifoQueue<Integer> {
