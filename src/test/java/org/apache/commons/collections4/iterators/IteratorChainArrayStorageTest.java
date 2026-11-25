@@ -36,9 +36,17 @@ import org.apache.commons.collections4.ArrayStorageOracle;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledForJreRange;
+import org.junit.jupiter.api.condition.JRE;
 import org.junit.jupiter.api.io.TempDir;
 
-/** Array-storage checks, retaining the frozen oracle to document upstream contract repairs. */
+/**
+ * Array-storage checks, retaining the frozen oracle to document upstream contract repairs.
+ * <p>
+ * {@link ArrayStorageOracle} compiles the pinned originals with {@code javac --release 21}, so these tests run on Java 21 and later.
+ * </p>
+ */
+@EnabledForJreRange(min = JRE.JAVA_21)
 class IteratorChainArrayStorageTest {
     @TempDir
     static Path work;

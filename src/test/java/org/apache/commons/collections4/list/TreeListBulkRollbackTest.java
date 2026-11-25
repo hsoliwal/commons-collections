@@ -59,7 +59,9 @@ class TreeListBulkRollbackTest {
         while (list.size() > 1) {
             list.remove(list.size() - 1);
         }
-        final long thread = Thread.currentThread().threadId();
+        // Thread.threadId() is Java 19+; for this platform thread the Java 8 getId() returns the same identifier.
+        @SuppressWarnings("deprecation")
+        final long thread = Thread.currentThread().getId();
         final long before = allocation.getThreadAllocatedBytes(thread);
         list.addAll(input);
         final long allocated = allocation.getThreadAllocatedBytes(thread) - before;

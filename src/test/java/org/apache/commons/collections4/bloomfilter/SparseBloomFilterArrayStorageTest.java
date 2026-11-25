@@ -31,38 +31,56 @@ import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HexFormat;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.function.Function;
 import java.util.function.IntPredicate;
 import java.util.function.LongPredicate;
+import java.util.stream.Collectors;
 
 import javax.tools.JavaCompiler;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
 
+import org.apache.commons.codec.digest.DigestUtils;
+import org.apache.commons.io.IOUtils;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledForJreRange;
+import org.junit.jupiter.api.condition.JRE;
 import org.junit.jupiter.api.io.TempDir;
 
-/** Original-source callback and representation contracts for the private primitive owner. */
+/**
+ * Original-source callback and representation contracts for the private primitive owner.
+ * <p>
+ * The original-source oracle compiles the sealed preimages with {@code javac --release 21}, so these tests run on Java 21 and later.
+ * </p>
+ */
+@EnabledForJreRange(min = JRE.JAVA_21)
 class SparseBloomFilterArrayStorageTest {
     private static final String OWNER = "org.apache.commons.collections4.bloomfilter.SparseBloomFilter";
-    private static final Map<String, String> ORIGINALS = Map.of(
-            "SparseBloomFilter", "2d6e37f68cbe5a4b4d1577b46e0437b44e00d470410d0232dfc72afbb52ec682",
-            "BitMaps", "e65707697540bbc344aec8129fdca4ee41dc665d244d84d0293ba799c003d8e8");
+    private static final Map<String, String> ORIGINALS = originals();
     private static URLClassLoader originalLoader;
     private static Class<?> originalClass;
     private static long observations;
 
     @TempDir
     static Path originalWork;
+
+    /** The sealed preimage digests; an unmodifiable map built without the Java 9 {@code Map.of} so the test sources compile for Java 8. */
+    private static Map<String, String> originals() {
+        final Map<String, String> originals = new LinkedHashMap<>();
+        originals.put("SparseBloomFilter", "2d6e37f68cbe5a4b4d1577b46e0437b44e00d470410d0232dfc72afbb52ec682");
+        originals.put("BitMaps", "e65707697540bbc344aec8129fdca4ee41dc665d244d84d0293ba799c003d8e8");
+        return Collections.unmodifiableMap(originals);
+    }
 
     private static final class Marker extends RuntimeException {
         private static final long serialVersionUID = 1L;
@@ -80,9 +98,9 @@ class SparseBloomFilterArrayStorageTest {
                 if (input == null) {
                     throw new IllegalStateException("Missing sealed original " + entry.getKey());
                 }
-                bytes = input.readAllBytes();
+                bytes = IOUtils.toByteArray(input);
             }
-            assertEquals(entry.getValue(), HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)));
+            assertEquals(entry.getValue(), DigestUtils.sha256Hex(bytes));
             final Path source = originalWork.resolve("source/" + entry.getKey() + ".java");
             Files.createDirectories(source.getParent());
             Files.write(source, bytes);
@@ -97,7 +115,7 @@ class SparseBloomFilterArrayStorageTest {
                     "-classpath", System.getProperty("surefire.test.class.path", System.getProperty("java.class.path")),
                     "-d", classes.toString());
             assertTrue(compiler.getTask(null, files, null, options, null,
-                    files.getJavaFileObjectsFromPaths(sources)).call());
+                    files.getJavaFileObjectsFromFiles(sources.stream().map(Path::toFile).collect(Collectors.toList()))).call());
         }
         originalLoader = new URLClassLoader(new URL[] {classes.toUri().toURL()}, SparseBloomFilterArrayStorageTest.class.getClassLoader()) {
             @Override
@@ -430,7 +448,7 @@ class SparseBloomFilterArrayStorageTest {
     }
 
     public static void main(final String[] args) throws Exception {
-        originalWork = Path.of(args[0]);
+        originalWork = Paths.get(args[0]);
         compileOriginal();
         try {
             final SparseBloomFilterArrayStorageTest tests = new SparseBloomFilterArrayStorageTest();

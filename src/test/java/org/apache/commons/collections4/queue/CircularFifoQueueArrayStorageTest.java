@@ -51,9 +51,17 @@ import org.apache.commons.collections4.ArrayStorageOracle;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledForJreRange;
+import org.junit.jupiter.api.condition.JRE;
 import org.junit.jupiter.api.io.TempDir;
 
-/** Exhaustive original-source checks for contiguous spans, cursor state and retained storage. */
+/**
+ * Exhaustive original-source checks for contiguous spans, cursor state and retained storage.
+ * <p>
+ * {@link ArrayStorageOracle} compiles the pinned originals with {@code javac --release 21}, so these tests run on Java 21 and later.
+ * </p>
+ */
+@EnabledForJreRange(min = JRE.JAVA_21)
 class CircularFifoQueueArrayStorageTest {
     @TempDir
     static Path work;

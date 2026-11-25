@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.lang.reflect.Method;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -36,6 +37,7 @@ import java.util.Vector;
 import java.util.function.Function;
 
 import org.junit.jupiter.api.Test;
+import org.opentest4j.TestAbortedException;
 
 /**
  * Differential tests of {@link ListUtils#removeAll(Collection, Collection)} and {@link ListUtils#retainAll(Collection, Collection)} against the plain loop
@@ -117,6 +119,21 @@ class ListUtilsMembershipTest {
             }
         }
         return list;
+    }
+
+    /**
+     * Returns {@code List.copyOf(values)}: an immutable list whose {@code contains(null)} throws. {@code List.copyOf} is Java 10+, so it is looked up
+     * reflectively to keep this module's test sources compiling for Java 8; on older runtimes the calling test is aborted from this point.
+     */
+    @SuppressWarnings("unchecked")
+    private static List<Integer> immutableCopy(final List<Integer> values) throws ReflectiveOperationException {
+        final Method copyOf;
+        try {
+            copyOf = List.class.getMethod("copyOf", Collection.class);
+        } catch (final NoSuchMethodException e) {
+            throw new TestAbortedException("List.copyOf requires Java 10 or later", e);
+        }
+        return (List<Integer>) copyOf.invoke(null, values);
     }
 
     private static List<Integer> randomIntegers(final Random random, final int size, final int range, final boolean nulls) {
@@ -210,13 +227,13 @@ class ListUtilsMembershipTest {
     }
 
     @Test
-    void testNullFreeCollectionsMatchTheLoop() {
+    void testNullFreeCollectionsMatchTheLoop() throws ReflectiveOperationException {
         final Random random = new Random(7);
         final List<Integer> memberValues = randomIntegers(random, 500, 700, false);
         final List<Integer> sourceValues = randomIntegers(random, 600, 900, false);
         assertSameSelections(new ArrayDeque<>(sourceValues), new TreeSet<>(memberValues), "TreeSet over ArrayDeque");
         assertSameSelections(new ArrayDeque<>(sourceValues), new ArrayList<>(memberValues), "ArrayList over ArrayDeque");
-        final List<Integer> immutable = List.copyOf(memberValues);
+        final List<Integer> immutable = immutableCopy(memberValues);
         assertSameSelections(sourceValues, immutable, "immutable list");
         final List<Integer> withNull = new ArrayList<>(sourceValues);
         withNull.add(20, null);
