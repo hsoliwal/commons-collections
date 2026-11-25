@@ -201,6 +201,8 @@
             <inputExclude>.asf.yaml</inputExclude>
             <inputExclude>site-content/**/*</inputExclude>
             <inputExclude>src/test/resources/org/apache/commons/collections4/data/test/*</inputExclude>
+            <!-- Recorded MethodBehaviourTest outcomes: a data table whose first line is the column header. -->
+            <inputExclude>src/test/resources/org/apache/commons/collections4/method-behaviour.tsv</inputExclude>
           </inputExcludes>
         </configuration>
       </plugin>
@@ -293,6 +295,8 @@
             <inputExclude>.asf.yaml</inputExclude>
             <inputExclude>site-content/**/*</inputExclude>
             <inputExclude>src/test/resources/org/apache/commons/collections4/data/test/*</inputExclude>
+            <!-- Recorded MethodBehaviourTest outcomes: a data table whose first line is the column header. -->
+            <inputExclude>src/test/resources/org/apache/commons/collections4/method-behaviour.tsv</inputExclude>
           </inputExcludes>
         </configuration>
       </plugin>

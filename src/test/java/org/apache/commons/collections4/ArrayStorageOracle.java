@@ -21,15 +21,16 @@ import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.HexFormat;
+import java.util.Collections;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.stream.Collectors;
 
 import javax.tools.DiagnosticCollector;
 import javax.tools.JavaCompiler;
@@ -37,18 +38,27 @@ import javax.tools.JavaFileObject;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
 
+import org.apache.commons.codec.digest.DigestUtils;
+import org.apache.commons.io.IOUtils;
+
 /** Independently compiles the immutable preimages used by this bounded receiver proof. */
 public final class ArrayStorageOracle implements AutoCloseable {
     private static final String PREFIX = "org.apache.commons.collections4.";
-    private static final Map<String, String> SOURCE_HASHES = Map.of(
-            "bloomfilter.CellExtractor", "f52a40c9586b13bf0c18d176e94e9c76ffea1a7024e0552ba9ac38dc058f405d",
-            "iterators.CollatingIterator", "e7f2f8e73e359919631d5f20e60ccd1ba4cc6b2c38f3e2882cea2cc20df882e7",
-            "iterators.IteratorChain", "7a87da0b110e1e657d670203c542fa3a00413b03161cc85c5de7e1eda5433a58",
-            "iterators.UnmodifiableIterator", "9a00fa5aabf154b4bfe18d5e179e269ad6361623f4e8529473d854cc0818aab8",
-            "queue.CircularFifoQueue", "d455d399425c40e2c98c8dab0f6d6b2de58b0df3225cecd1f212f13d5173da1e",
-            "iterators.PermutationIterator", "92c273d6b5b85e4bd51aabe559e6b4e0b0a01ec53977f18f0ad10419943c81c7");
+    private static final Map<String, String> SOURCE_HASHES = sourceHashes();
 
     private final URLClassLoader loader;
+
+    /** The pinned preimage digests; an unmodifiable map built without the Java 9 {@code Map.of} so the test sources compile for Java 8. */
+    private static Map<String, String> sourceHashes() {
+        final Map<String, String> hashes = new LinkedHashMap<>();
+        hashes.put("bloomfilter.CellExtractor", "f52a40c9586b13bf0c18d176e94e9c76ffea1a7024e0552ba9ac38dc058f405d");
+        hashes.put("iterators.CollatingIterator", "e7f2f8e73e359919631d5f20e60ccd1ba4cc6b2c38f3e2882cea2cc20df882e7");
+        hashes.put("iterators.IteratorChain", "7a87da0b110e1e657d670203c542fa3a00413b03161cc85c5de7e1eda5433a58");
+        hashes.put("iterators.UnmodifiableIterator", "9a00fa5aabf154b4bfe18d5e179e269ad6361623f4e8529473d854cc0818aab8");
+        hashes.put("queue.CircularFifoQueue", "d455d399425c40e2c98c8dab0f6d6b2de58b0df3225cecd1f212f13d5173da1e");
+        hashes.put("iterators.PermutationIterator", "92c273d6b5b85e4bd51aabe559e6b4e0b0a01ec53977f18f0ad10419943c81c7");
+        return Collections.unmodifiableMap(hashes);
+    }
 
     /** Creates original classes from exact UTF-8 preimages; the live owner is never an oracle. */
     public ArrayStorageOracle(final Path work) throws Exception {
@@ -65,9 +75,9 @@ public final class ArrayStorageOracle implements AutoCloseable {
                 if (input == null) {
                     throw new IllegalStateException("Missing immutable original " + leaf);
                 }
-                bytes = input.readAllBytes();
+                bytes = IOUtils.toByteArray(input);
             }
-            final String actualHash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
+            final String actualHash = DigestUtils.sha256Hex(bytes);
             if (!entry.getValue().equals(actualHash)) {
                 throw new IllegalStateException("Original-source drift: " + leaf);
             }
@@ -84,7 +94,7 @@ public final class ArrayStorageOracle implements AutoCloseable {
                     System.getProperty("surefire.test.class.path", System.getProperty("java.class.path")),
                     "-d", classes.toString());
             if (!Boolean.TRUE.equals(compiler.getTask(null, files, diagnostics, options, null,
-                    files.getJavaFileObjectsFromPaths(sources)).call())) {
+                    files.getJavaFileObjectsFromFiles(sources.stream().map(Path::toFile).collect(Collectors.toList()))).call())) {
                 throw new IllegalStateException("Original source compilation failed: " + diagnostics.getDiagnostics());
             }
         }
