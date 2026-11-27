@@ -28,6 +28,8 @@
 // Modified 2026 by Hitesh Soliwal and contributors: linear indexed bulk insertion into reusable slots.
 // Modified 2026 by Synexia contributors: direct threaded reverse search and List hashing without iterator allocation.
 // Modified 2026 by Hitesh Soliwal and Synexia contributors: direct cursor callback traversal.
+// Modified 2026 by Synexia contributors: direct iterator-free unary transformation through AVL slot lanes.
+// Modified 2026 by Synexia contributors: exact-owner dual-slot list equality.
 package org.apache.commons.collections4.list;
 
 import java.util.AbstractList;
@@ -41,6 +43,7 @@ import java.util.ListIterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.function.Consumer;
+import java.util.function.UnaryOperator;
 
 import org.apache.commons.collections4.OrderedIterator;
 
@@ -1475,6 +1478,82 @@ public class TreeList<E> extends AbstractList<E> {
         final E result = slots.value(slot);
         slots.values[slot] = obj;
         return result;
+    }
+
+    /**
+     * Apply a transformation in list order directly through the existing
+     * owner-held slot lanes. The cursor advances before each callback as the
+     * inherited ListIterator does; the post-callback check matches set().
+     * Subclasses keep the original virtual ListIterator dispatch.
+     */
+    @Override
+    public void replaceAll(final UnaryOperator<E> operator) {
+        Objects.requireNonNull(operator);
+        if (getClass() != TreeList.class || size < 1024) {
+            super.replaceAll(operator);
+            return;
+        }
+        final int expectedModCount = modCount;
+        int current = root == -1 ? -1 : slots.min(root);
+        for (int index = 0; index < size; index++) {
+            if (modCount != expectedModCount) {
+                throw new ConcurrentModificationException();
+            }
+            final int slot = current;
+            final E previous = slots.value(slot);
+            current = slots.next(slot);
+            final E transformed = operator.apply(previous);
+            if (modCount != expectedModCount) {
+                throw new ConcurrentModificationException();
+            }
+            slots.values[slot] = transformed;
+        }
+    }
+
+    /**
+     * Exact TreeList equality uses two existing AVL successor lanes rather
+     * than materializing a pair of ListIterators. Unrelated List types and
+     * subclasses retain inherited iterator dispatch and exception behavior.
+     * The first operand invokes equals even when the stored references are
+     * identical, matching AbstractList's observable comparison contract.
+     */
+    @Override
+    public boolean equals(final Object other) {
+        if (other == this) {
+            return true;
+        }
+        if (getClass() != TreeList.class || other == null || other.getClass() != TreeList.class) {
+            return super.equals(other);
+        }
+        // For medium equal lists, JIT-compiled ListIterators are already
+        // scalar-replaced. Retain that well-optimized path rather than
+        // forcing an unnecessary direct-cursor loop.
+        if (size > 256 && size < 16384) {
+            return super.equals(other);
+        }
+        final TreeList<?> that = (TreeList<?>) other;
+        final int myExpected = modCount;
+        final int otherExpected = that.modCount;
+        int myNext = root == -1 ? -1 : slots.min(root);
+        int otherNext = that.root == -1 ? -1 : that.slots.min(that.root);
+        int index = 0;
+        while (index < size && index < that.size) {
+            if (modCount != myExpected) {
+                throw new ConcurrentModificationException();
+            }
+            final Object left = slots.values[myNext];
+            myNext = slots.next(myNext);
+            if (that.modCount != otherExpected) {
+                throw new ConcurrentModificationException();
+            }
+            final Object right = that.slots.values[otherNext];
+            otherNext = that.slots.next(otherNext);
+            if (!(left == null ? right == null : left.equals(right))) {
+                return false;
+            }
+            index++;
+        }
+        return index >= size && index >= that.size;
     }
 
     /**
