@@ -28,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -46,6 +47,7 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Queue;
 import java.util.TreeSet;
+import java.util.function.Consumer;
 
 import org.apache.commons.collections4.ArrayStorageOracle;
 import org.junit.jupiter.api.AfterAll;
@@ -271,7 +273,8 @@ class CircularFifoQueueArrayStorageTest {
         final Class<?> original = oracle.originalClass("queue.CircularFifoQueue");
         assertEquals(surface(original),
                 declaredSurfaceWithExactArrayOverrides(original, CircularFifoQueue.class));
-        assertEquals(effectiveSurface(original), effectiveSurface(CircularFifoQueue.class));
+        assertEquals(effectiveSurface(original),
+                effectiveSurfaceWithAdmittedForEach(original, CircularFifoQueue.class));
         assertEquals(original.getModifiers(), CircularFifoQueue.class.getModifiers(), "class modifiers");
         assertEquals(Arrays.toString(original.getGenericInterfaces()),
                 Arrays.toString(CircularFifoQueue.class.getGenericInterfaces()));
@@ -321,19 +324,26 @@ class CircularFifoQueueArrayStorageTest {
 
     /**
      * Preserve every old declaration and allow only exact implementations of the
-     * two operations that the frozen preimage already inherits from AbstractCollection.
-     * five operations that the frozen preimage already inherits from AbstractCollection.
+     * seven operations that the frozen preimage already inherits from AbstractCollection,
+     * plus the Iterable.forEach default method.
      * The declarations remain optional so this gate also accepts the unchanged baseline.
      */
     private static TreeSet<String> declaredSurfaceWithExactArrayOverrides(final Class<?> original,
             final Class<?> current) throws Exception {
         final TreeSet<String> result = surface(current);
         // Exact AbstractCollection methods the fork overrides for ring-span exports, ring
-        // membership/removal and bulk-tail writes; every other declaration must stay original.
+        // membership/removal, bulk-tail writes and bulk membership compaction; every other
+        // declaration must stay original.
         final Object[][] admitted = {
             {"toArray", new Class<?>[0]}, {"toArray", new Class<?>[] {Object[].class}},
             {"contains", new Class<?>[] {Object.class}}, {"remove", new Class<?>[] {Object.class}},
-            {"addAll", new Class<?>[] {java.util.Collection.class}}};
+            {"addAll", new Class<?>[] {Collection.class}},
+            {"removeAll", new Class<?>[] {Collection.class}},
+            {"retainAll", new Class<?>[] {Collection.class}}};
+        final Method forEach = admittedIterableForEach(original, current);
+        if (forEach != null) {
+            result.remove(forEach.toGenericString());
+        }
         for (final Object[] entry : admitted) {
             final String name = (String) entry[0];
             final Class<?>[] parameters = (Class<?>[]) entry[1];
@@ -348,6 +358,45 @@ class CircularFifoQueueArrayStorageTest {
             assertEquals(methodSignature(inherited), methodSignature(implementation),
                     "override must preserve modifiers, generic signature and declared exceptions");
             result.remove(implementation.toGenericString());
+        }
+        return result;
+    }
+
+    /**
+     * Iterable.forEach is an interface default method, so its generic string carries
+     * "default" and Iterable's own type variable. An override must keep the inherited
+     * modifiers, erased return/parameter/throws descriptor, and bind Consumer to the
+     * queue's own type variable.
+     *
+     * @return the checked override, or null while forEach is still inherited
+     */
+    private static Method admittedIterableForEach(final Class<?> original, final Class<?> current)
+            throws Exception {
+        final Method inherited = original.getMethod("forEach", Consumer.class);
+        assertEquals(Iterable.class, inherited.getDeclaringClass(), "frozen inherited owner");
+        final Method implementation;
+        try {
+            implementation = current.getDeclaredMethod("forEach", Consumer.class);
+        } catch (final NoSuchMethodException stillInherited) {
+            return null;
+        }
+        assertEquals(inherited.getModifiers(), implementation.getModifiers(), "forEach modifiers");
+        assertEquals(inherited.getReturnType(), implementation.getReturnType(), "forEach return type");
+        assertArrayEquals(inherited.getExceptionTypes(), implementation.getExceptionTypes(),
+                "forEach declared exceptions");
+        assertEquals("java.util.function.Consumer<? super " + current.getTypeParameters()[0].getName() + ">",
+                implementation.getGenericParameterTypes()[0].getTypeName(), "forEach generic parameter");
+        return implementation;
+    }
+
+    /** The effective surface, with a checked forEach override spelled as the inherited Iterable default. */
+    private static TreeSet<String> effectiveSurfaceWithAdmittedForEach(final Class<?> original,
+            final Class<?> current) throws Exception {
+        final TreeSet<String> result = effectiveSurface(current);
+        final Method forEach = admittedIterableForEach(original, current);
+        if (forEach != null) {
+            assertTrue(result.remove(methodSignature(forEach)), "effective forEach override");
+            result.add(methodSignature(original.getMethod("forEach", Consumer.class)));
         }
         return result;
     }
